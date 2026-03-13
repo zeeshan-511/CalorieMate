@@ -1,33 +1,40 @@
-name: caloriematefyp
-description: Flutter app with Signup Page, Google Authentication and MongoDB backend.
-
+name: CalorieMate
+description: Smart Label Scanner with OCR, Signup, Google Auth, and MongoDB backend
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # HTTP API calls (for MongoDB backend)
-  http: ^1.2.1
-
-  # Google Sign In
-  google_sign_in: ^6.2.1
-
-  # Secure token storage
-  flutter_secure_storage: ^9.0.0
-
-  # Local storage
-  shared_preferences: ^2.2.2
-
-  # Fonts
+  # UI and Icons
+  cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
 
-  # iOS style icons
-  cupertino_icons: ^1.0.8
+  # Camera & Image
+  camera: ^0.10.5
+  image_picker: ^1.0.4
+  path: ^1.8.3
+  path_provider: ^2.1.1
+
+  # HTTP
+  http: ^1.2.1
+  http_parser: ^4.0.2
+
+  # Permissions
+  permission_handler: ^11.0.1
+
+  # Authentication & Storage
+  google_sign_in: ^6.2.1
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.2
+
+  # Environment variables
+  flutter_dotenv: ^5.0.2
 
 dev_dependencies:
   flutter_test:
@@ -47,3 +54,10 @@ flutter:
     - assets/images/History.png
     - assets/images/compare.png
     - assets/images/scan.png
+    - assets/images/lays.png
+    - assets/images/pure_magic.png
+    - assets/images/munch.png
+    - assets/images/nutella.png
+    - assets/images/mccain.png
+    - assets/images/malas.png
+    - assets/images/7up.png

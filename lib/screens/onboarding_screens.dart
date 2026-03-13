@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'signup_page.dart'; // Import the signup page
 
 /// STEP INDICATOR
 class StepIndicator extends StatelessWidget {
@@ -76,11 +77,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     },
   ];
 
+  void _navigateToSignUp() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const SignUpPage()),
+    );
+  }
+
   void _next() {
     if (_currentStep < _data.length) {
       setState(() => _currentStep++);
     } else {
-      // TODO: Navigate to Login/Home screen
+      _navigateToSignUp();
     }
   }
 
@@ -91,7 +99,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _skip() {
-    // TODO: Navigate to Login/Home screen
+    _navigateToSignUp();
   }
 
   @override

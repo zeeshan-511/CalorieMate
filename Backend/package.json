@@ -5,9 +5,15 @@
   "main": "server.js",
   "scripts": {
     "start": "nodemon server.js",
-    "dev": "nodemon --dns-result-order=ipv4first server.js"
+    "dev": "nodemon --dns-result-order=ipv4first server.js",
+    "test:recommendations": "node recommendation_smoke_test.js",
+    "refine:ingredients": "python refine_ingredient_master.py",
+    "rebuild:halal-catalog": "python rebuild_halal_product_catalog.py",
+    "train:retriever": "python train_product_retriever.py",
+    "audit:halal-catalog": "node recommendation_smoke_test.js"
   },
   "dependencies": {
+    "axios": "^1.15.2",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",

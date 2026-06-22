@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'screens/splash_screen.dart';
@@ -8,19 +9,23 @@ import 'screens/onboarding_screens.dart'; // Import onboarding screens
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request permissions
-  await Permission.camera.request();
-  await Permission.storage.request();
-
-  // Get available cameras (you'll need this later for scan screen)
-  final cameras = await availableCameras();
-  final firstCamera = cameras.first;
+  CameraDescription? firstCamera;
+  try {
+    if (!kIsWeb) {
+      await Permission.camera.request();
+      await Permission.storage.request();
+    }
+    final cameras = await availableCameras();
+    if (cameras.isNotEmpty) firstCamera = cameras.first;
+  } catch (error) {
+    debugPrint('Camera initialization deferred: $error');
+  }
 
   runApp(MyApp(camera: firstCamera));
 }
 
 class MyApp extends StatelessWidget {
-  final CameraDescription camera;
+  final CameraDescription? camera;
   const MyApp({Key? key, required this.camera}) : super(key: key);
 
   @override
@@ -41,7 +46,7 @@ class MyApp extends StatelessWidget {
 
 // Wrapper to navigate from SplashScreen to OnboardingScreen
 class SplashScreenWrapper extends StatefulWidget {
-  final CameraDescription camera;
+  final CameraDescription? camera;
   const SplashScreenWrapper({Key? key, required this.camera}) : super(key: key);
 
   @override

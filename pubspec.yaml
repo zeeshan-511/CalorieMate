@@ -32,6 +32,7 @@ dependencies:
   google_sign_in: ^6.2.1
   flutter_secure_storage: ^9.0.0
   shared_preferences: ^2.2.2
+  google_mlkit_text_recognition: ^0.15.0
 
   # Environment variables
   flutter_dotenv: ^5.0.2

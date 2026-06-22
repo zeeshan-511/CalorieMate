@@ -4,28 +4,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'scan_screen.dart';
 import 'family_profile.dart';
+import 'my_preferences.dart' as myprefs; // Import the preferences page
+import 'view_preferences.dart';
+import 'view_family_members.dart';
+import 'view_family_preferences.dart';
+import 'family_requests_screen.dart';
+import 'ScanHistory.dart';
+import 'reports_screen.dart';
+import 'health_dashboard_screen.dart';
 
-class NutriScanApp extends StatelessWidget {
-  const NutriScanApp({super.key});
+// ─────────────────────────────────────────────
+//  MODELS
+// ─────────────────────────────────────────────
+class _FeatureCard {
+  final IconData icon;
+  final String label;
+  final Color bgColor;
+  final Color iconColor;
+  const _FeatureCard(this.icon, this.label, this.bgColor, this.iconColor);
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'NutriScan',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Poppins',
-        scaffoldBackgroundColor: const Color(0xFFFFF8EC),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E8B72)),
-        useMaterial3: true,
-      ),
-      home: const HomePage(),
-    );
-  }
+class _BlogPost {
+  final String tag;
+  final String title;
+  final Color tagColor;
+  final Color tagBg;
+  final IconData icon;
+  const _BlogPost(this.tag, this.title, this.tagColor, this.tagBg, this.icon);
 }
 
 // ─────────────────────────────────────────────
-//  SIDEBAR DRAWER - Updated with userId and userName
+//  SIDEBAR DRAWER
 // ─────────────────────────────────────────────
 class AppDrawer extends StatelessWidget {
   final String userName;
@@ -44,16 +53,13 @@ class AppDrawer extends StatelessWidget {
   static const Color _teal = Color(0xFF2E8B72);
 
   Future<void> _logout(BuildContext context) async {
-    // Clear SharedPreferences on logout
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-
     if (!context.mounted) return;
-
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const LoginPage()),
-          (route) => false,
+      (route) => false,
     );
   }
 
@@ -79,7 +85,6 @@ class AppDrawer extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Profile header with dynamic user data ──
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
                 child: Row(
@@ -87,21 +92,12 @@ class AppDrawer extends StatelessWidget {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.white24,
-                      child: ClipOval(
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.white24,
-                          child: Center(
-                            child: Text(
-                              userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                      child: Text(
+                        userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -134,8 +130,6 @@ class AppDrawer extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // ── Menu items ──
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
@@ -146,14 +140,49 @@ class AppDrawer extends StatelessWidget {
                       onTap: onScanTap,
                     ),
                     _divider(),
+
+                    // ✅ Preferences Section FIRST
+                    _DrawerItem(
+                      icon: Icons.tune,
+                      label: 'Set your Preferences',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                myprefs.AdditivesPreferencesScreen(
+                                  userName: userName,
+                                  userEmail: userEmail,
+                                  userId: userId,
+                                  preferences: myprefs.UserPreferences(),
+                                ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _DrawerItem(
+                      icon: Icons.visibility,
+                      label: 'See your Preferences',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ViewPreferencesScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    // ✅ Family Section AFTER
                     _DrawerItem(
                       icon: Icons.people_outline,
-                      label: 'Family Profile',
+                      label: 'Add Family Member',
                       onTap: () {
-                        // Close drawer first
-                        Navigator.pop(context);
-
-                        // Navigate to FamilyProfileSetupScreen with user data
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -165,27 +194,137 @@ class AppDrawer extends StatelessWidget {
                         );
                       },
                     ),
+
                     _divider(),
-                    _DrawerItem(icon: Icons.history, label: 'Scan History'),
+
+                    _DrawerItem(
+                      icon: Icons.groups_2_outlined,
+                      label: 'View Family Members',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                ViewFamilyMembersScreen(userId: userId),
+                          ),
+                        );
+                      },
+                    ),
+
                     _divider(),
-                    _DrawerItem(icon: Icons.tune, label: 'Set Preferences'),
+
+                    _DrawerItem(
+                      icon: Icons.groups_2_outlined,
+                      label: 'View Family Preferences',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                ViewFamilyMembersPreferencesScreen(
+                                  userId: userId,
+                                  userName: userName,
+                                  userEmail: userEmail,
+                                ),
+                          ),
+                        );
+                      },
+                    ),
+
                     _divider(),
-                    _DrawerItem(icon: Icons.list_alt_outlined, label: 'My Preferences'),
+
+                    _DrawerItem(
+                      icon: Icons.notifications_active_outlined,
+                      label: 'Family Requests',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => FamilyRequestsScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
                     _divider(),
-                    _DrawerItem(icon: Icons.compare_arrows, label: 'Compare Products'),
+
+                    _DrawerItem(
+                      icon: Icons.history,
+                      label: 'Scan History',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ScanHistoryScreen(
+                              userId: userId,
+                              userEmail: userEmail,
+                              userName: userName,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
                     _divider(),
-                    _DrawerItem(icon: Icons.settings_outlined, label: 'Settings'),
+
+                    _DrawerItem(
+                      icon: Icons.assignment_outlined,
+                      label: 'Food Reports',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ReportsScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _divider(),
+
+                    _DrawerItem(
+                      icon: Icons.favorite_outline,
+                      label: 'My Health',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => HealthDashboardScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _divider(),
+
+                    _DrawerItem(
+                      icon: Icons.settings_outlined,
+                      label: 'Settings',
+                    ),
                     _divider(),
                   ],
                 ),
               ),
-
-              // ── Log Out ──
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
                 child: GestureDetector(
                   onTap: () => _logout(context),
-                  child: const _DrawerItem(icon: Icons.logout, label: 'Log Out'),
+                  child: const _DrawerItem(
+                    icon: Icons.logout,
+                    label: 'Log Out',
+                  ),
                 ),
               ),
             ],
@@ -207,7 +346,6 @@ class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-
   const _DrawerItem({required this.icon, required this.label, this.onTap});
 
   @override
@@ -232,11 +370,10 @@ class _DrawerItem extends StatelessWidget {
         ),
       ),
       onTap: () {
-        Navigator.pop(context); // Close drawer
+        Navigator.pop(context);
         if (onTap != null) {
-          onTap!(); // Call the provided callback
+          onTap!();
         } else {
-          // Show coming soon for other menu items
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('$label feature coming soon!'),
@@ -250,33 +387,107 @@ class _DrawerItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  HOME PAGE - Updated with SharedPreferences backup
+//  NUTRI SCAN APP
+// ─────────────────────────────────────────────
+class NutriScanApp extends StatelessWidget {
+  const NutriScanApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'CalorieMate',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        fontFamily: 'Poppins',
+        scaffoldBackgroundColor: const Color(0xFFF5F9F7),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E8B72)),
+        useMaterial3: true,
+      ),
+      home: const HomePage(),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  HOME PAGE
 // ─────────────────────────────────────────────
 class HomePage extends StatefulWidget {
   final Map<String, dynamic>? userData;
-
   const HomePage({super.key, this.userData});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   int _selectedNav = 0;
-  late String userName;
-  late String userEmail;
-  late String userId;
+  late String userName = '';
+  late String userEmail = '';
+  late String userId = '';
   List<CameraDescription>? _cameras;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   static const Color _teal = Color(0xFF2E8B72);
-  static const Color _bg = Color(0xFFFFF8EC);
+  static const Color _bg = Color(0xFFF5F9F7);
 
-  final List<_CategoryItem> _categories = [
-    _CategoryItem(Icons.lunch_dining, 'Chips'),
-    _CategoryItem(Icons.local_drink, 'Soft Drink'),
-    _CategoryItem(Icons.cookie, 'Chocolate'),
-    _CategoryItem(Icons.local_bar, 'Juice'),
-    _CategoryItem(Icons.breakfast_dining, 'Cereal'),
+  final List<_FeatureCard> _features = const [
+    _FeatureCard(
+      Icons.qr_code_scanner,
+      'Scan',
+      Color(0xFFE1F5EE),
+      Color(0xFF0F6E56),
+    ),
+    _FeatureCard(
+      Icons.family_restroom_outlined,
+      'Add Family',
+      Color(0xFFE1F5EE),
+      Color(0xFF0F6E56),
+    ),
+    _FeatureCard(
+      Icons.notifications_active_outlined,
+      'Requests',
+      Color(0xFFE6F1FB),
+      Color(0xFF185FA5),
+    ),
+    _FeatureCard(
+      Icons.history,
+      'History',
+      Color(0xFFFAEEDA),
+      Color(0xFF854F0B),
+    ),
+  ];
+
+  final List<_BlogPost> _blogPosts = const [
+    _BlogPost(
+      'Nutrition',
+      'What does the Nutri-Score really mean?',
+      Color(0xFF0F6E56),
+      Color(0xFFE1F5EE),
+      Icons.eco_outlined,
+    ),
+    _BlogPost(
+      'Labels',
+      'Top 5 hidden sugars to watch out for',
+      Color(0xFF854F0B),
+      Color(0xFFFAEEDA),
+      Icons.search_outlined,
+    ),
+    _BlogPost(
+      'Lifestyle',
+      'How to read food labels like a pro',
+      Color(0xFF185FA5),
+      Color(0xFFE6F1FB),
+      Icons.menu_book_outlined,
+    ),
+    _BlogPost(
+      'Health',
+      'Palm oil: what the science actually says',
+      Color(0xFFA32D2D),
+      Color(0xFFFCEBEB),
+      Icons.science_outlined,
+    ),
   ];
 
   @override
@@ -284,25 +495,33 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _loadUserData();
     _initializeCameras();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
-    // First try to get from widget.userData
     if (widget.userData != null && widget.userData!.isNotEmpty) {
       userName = widget.userData!['fullName'] ?? 'Guest User';
       userEmail = widget.userData!['email'] ?? 'guest@example.com';
       userId = widget.userData!['id'] ?? '';
     } else {
-      // If no userData, try to load from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       userName = prefs.getString('user_name') ?? 'Guest User';
       userEmail = prefs.getString('user_email') ?? 'guest@example.com';
       userId = prefs.getString('user_id') ?? '';
     }
-
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _initializeCameras() async {
@@ -323,9 +542,7 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-
     if (!mounted) return;
-
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -353,12 +570,11 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildTopBar(context),
-                    _buildGreeting(),
-                    _buildCategoryRow(),
-                    _buildDiscoverSection(),
-                    _buildBannerCard(),
-                    _buildSeeMore(),
-                    const SizedBox(height: 16),
+                    _buildHeroScanSection(),
+                    _buildFeatureCards(),
+                    _buildHowItWorks(),
+                    _buildNutritionTips(),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -370,57 +586,57 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── Top bar with user initial ──
   Widget _buildTopBar(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search',
-                        hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
+          Builder(
+            builder: (ctx) {
+              return GestureDetector(
+                onTap: () => Scaffold.of(ctx).openDrawer(),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: _teal,
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'G',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: _teal,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(Icons.tune, color: Colors.white, size: 18),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Welcome back',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF888888)),
+                ),
+                Text(
+                  userName.split(' ').first,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Stack(
             children: [
-              const Icon(Icons.notifications_none, size: 28, color: Colors.black87),
+              const Icon(
+                Icons.notifications_none,
+                size: 28,
+                color: Colors.black87,
+              ),
               Positioned(
                 right: 0,
                 top: 0,
@@ -435,235 +651,342 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          const SizedBox(width: 10),
-          Builder(builder: (ctx) {
-            return GestureDetector(
-              onTap: () => Scaffold.of(ctx).openDrawer(),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: _teal,
-                child: Text(
-                  userName.isNotEmpty ? userName[0].toUpperCase() : 'G',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => myprefs.AdditivesPreferencesScreen(
+                    userName: userName,
+                    userEmail: userEmail,
+                    userId: userId,
+                    preferences: myprefs.UserPreferences(),
                   ),
                 ),
+              );
+            },
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black12),
               ),
-            );
-          }),
+              child: const Icon(Icons.tune, size: 20, color: Colors.black54),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // ── Greeting with user's name ──
-  Widget _buildGreeting() {
-    String firstName = userName.split(' ').first;
-
+  Widget _buildHeroScanSection() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.symmetric(vertical: 28),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Good Morning, $firstName!',
-            style: const TextStyle(
-              color: Color(0xFF2E8B72),
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
+          Center(
+            child: AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: _pulseAnimation.value * 1.3,
+                      child: Container(
+                        width: 86,
+                        height: 86,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _teal.withOpacity(0.2),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: _pulseAnimation.value * 1.15,
+                      child: Container(
+                        width: 86,
+                        height: 86,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _teal.withOpacity(0.4),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _navigateToScan,
+                      child: Container(
+                        width: 86,
+                        height: 86,
+                        decoration: const BoxDecoration(
+                          color: _teal,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.qr_code_scanner,
+                          color: Colors.white,
+                          size: 36,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
-          const SizedBox(height: 2),
-          const Text(
-            "Rise And Shine! It's Time To Make The Right Choices",
-            style: TextStyle(
-              color: Color(0xFF2E8B72),
-              fontSize: 12,
+          const SizedBox(height: 18),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Scan Your Food. Know What You Eat.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+                height: 1.3,
+              ),
             ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Personalized nutrition guidance from your saved preferences',
+            style: TextStyle(fontSize: 13, color: Color(0xFF888888)),
           ),
         ],
       ),
     );
   }
 
-  // ── Category chips row ──
-  Widget _buildCategoryRow() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: _categories.map((c) => _CategoryChip(item: c)).toList(),
+  Widget _buildFeatureCards() {
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _features.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final f = _features[i];
+          return GestureDetector(
+            onTap: () {
+              if (i == 0) {
+                _navigateToScan();
+              } else if (i == 1) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FamilyProfileSetupScreen(
+                      userId: userId,
+                      userName: userName,
+                    ),
+                  ),
+                );
+              } else if (i == 2) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FamilyRequestsScreen(
+                      userId: userId,
+                      userName: userName,
+                      userEmail: userEmail,
+                    ),
+                  ),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ScanHistoryScreen(
+                      userId: userId,
+                      userName: userName,
+                      userEmail: userEmail,
+                    ),
+                  ),
+                );
+              }
+            },
+            child: Container(
+              width: 82,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.black.withOpacity(0.07)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: f.bgColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(f.icon, color: f.iconColor, size: 20),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    f.label,
+                    style: const TextStyle(fontSize: 11, color: Colors.black87),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  // ── Discover with asset images ──
-  Widget _buildDiscoverSection() {
-    final products = [
-      _ProductCard("Lay's", 'assets/images/lays.png'),
-      _ProductCard('Pure Magic', 'assets/images/pure_magic.png'),
-      _ProductCard('7UP', 'assets/images/7up.png'),
-      _ProductCard('Munch', 'assets/images/munch.png'),
+  Widget _buildHowItWorks() {
+    final steps = [
+      {
+        'icon': Icons.qr_code_scanner,
+        'label': 'Scan\nProduct',
+        'color': const Color(0xFFE1F5EE),
+        'iconColor': const Color(0xFF0F6E56),
+      },
+      {
+        'icon': Icons.psychology_outlined,
+        'label': 'Match Saved\nPreferences',
+        'color': const Color(0xFFE6F1FB),
+        'iconColor': const Color(0xFF185FA5),
+      },
+      {
+        'icon': Icons.favorite_outline,
+        'label': 'Get Health\nInsights',
+        'color': const Color(0xFFFCEBEB),
+        'iconColor': const Color(0xFFA32D2D),
+      },
     ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Discover',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              Row(
-                children: const [
-                  Text(
-                    'View All',
-                    style: TextStyle(color: _teal, fontSize: 13),
-                  ),
-                  SizedBox(width: 2),
-                  Icon(Icons.chevron_right, color: _teal, size: 18),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 130,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: products.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, i) => _ProductTile(data: products[i]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Banner with Nutella asset image ──
-  Widget _buildBannerCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          height: 150,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFF8C00), Color(0xFFFFB347)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(18.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Check out the Nutri-Score of your product for a quick glance at its nutritional quality! Make informed choices with just a scan!',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              ClipRRect(
-                borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
-                child: Image.asset(
-                  'assets/images/nutella.png',
-                  width: 130,
-                  height: 150,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 130,
-                    color: Colors.orange.shade300,
-                    child: const Icon(Icons.image, color: Colors.white, size: 40),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── See more with asset images ──
-  Widget _buildSeeMore() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'See more',
+            'How it works',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _SeeMoreCard(
-                  imageUrl: 'assets/images/mccain.png',
-                  name: 'McCain\nChilli Garlic\nPotato Bites',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _SeeMoreCard(
-                  imageUrl: 'assets/images/malas.png',
-                  name: "Mala's\nStrawberry\nJam",
-                ),
-              ),
-            ],
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withOpacity(0.07)),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+            child: Row(
+              children: [
+                for (int i = 0; i < steps.length; i++) ...[
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: steps[i]['color'] as Color,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            steps[i]['icon'] as IconData,
+                            color: steps[i]['iconColor'] as Color,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          steps[i]['label'] as String,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.black87,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (i < steps.length - 1)
+                    Container(
+                      width: 24,
+                      height: 1,
+                      color: Colors.black.withOpacity(0.15),
+                      margin: const EdgeInsets.only(bottom: 24),
+                    ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ── Bottom Nav with scan navigation ──
+  Widget _buildNutritionTips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                'Nutrition tips',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              Text('See all', style: TextStyle(fontSize: 13, color: _teal)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._blogPosts.map(
+            (post) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _BlogCard(post: post),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomNav() {
-    final icons = [
-      Icons.home_outlined,
-      Icons.qr_code_scanner,
-      Icons.history,
-      Icons.directions_run,
-      Icons.headset_mic_outlined,
+    final navItems = [
+      {'icon': Icons.home_outlined, 'label': 'Home'},
+      {'icon': Icons.qr_code_scanner, 'label': 'Scan'},
+      {'icon': Icons.bar_chart_outlined, 'label': 'Reports'},
+      {'icon': Icons.favorite_outline, 'label': 'Health'},
+      {'icon': Icons.settings_outlined, 'label': 'Settings'},
     ];
 
     return Container(
-      height: 64,
       decoration: BoxDecoration(
-        color: const Color(0xFF2E8B72),
+        color: _teal,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
@@ -676,192 +999,178 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(navItems.length, (i) {
+              final selected = i == _selectedNav;
+              final isScan = i == 1;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _selectedNav = i);
+                  if (isScan) {
+                    _navigateToScan();
+                  } else if (i == 2) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ReportsScreen(
+                          userId: userId,
+                          userName: userName,
+                          userEmail: userEmail,
+                        ),
+                      ),
+                    ).then((_) {
+                      if (mounted) setState(() => _selectedNav = 0);
+                    });
+                  } else if (i == 3) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => HealthDashboardScreen(
+                          userId: userId,
+                          userName: userName,
+                          userEmail: userEmail,
+                        ),
+                      ),
+                    ).then((_) {
+                      if (mounted) setState(() => _selectedNav = 0);
+                    });
+                  } else if (i != 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${navItems[i]['label']} feature coming soon!',
+                        ),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    isScan
+                        ? Container(
+                            width: 48,
+                            height: 48,
+                            margin: const EdgeInsets.only(bottom: 2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withOpacity(0.15),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.qr_code_scanner,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: selected
+                                ? BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  )
+                                : null,
+                            child: Icon(
+                              navItems[i]['icon'] as IconData,
+                              color: selected
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.6),
+                              size: 24,
+                            ),
+                          ),
+                    if (!isScan)
+                      Text(
+                        navItems[i]['label'] as String,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: selected
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.6),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BlogCard extends StatelessWidget {
+  final _BlogPost post;
+  const _BlogCard({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withOpacity(0.07)),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(icons.length, (i) {
-          final selected = i == _selectedNav;
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedNav = i;
-              });
-
-              if (i == 1) { // Scan button
-                _navigateToScan();
-              } else if (i != 0) { // Show coming soon for other nav items except home
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${icons[i].toString().split('.').last} feature coming soon!'),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: selected
-                  ? BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              )
-                  : null,
-              child: Icon(
-                icons[i],
-                color: selected ? Colors.white : Colors.white60,
-                size: 26,
-              ),
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: post.tagBg,
+              borderRadius: BorderRadius.circular(11),
             ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  SMALL WIDGETS (Unchanged)
-// ─────────────────────────────────────────────
-class _CategoryItem {
-  final IconData icon;
-  final String label;
-  const _CategoryItem(this.icon, this.label);
-}
-
-class _CategoryChip extends StatelessWidget {
-  final _CategoryItem item;
-  const _CategoryChip({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF0CC),
-            borderRadius: BorderRadius.circular(16),
+            child: Icon(post.icon, color: post.tagColor, size: 20),
           ),
-          child: Icon(item.icon, color: const Color(0xFF2E8B72), size: 26),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          item.label,
-          style: const TextStyle(fontSize: 11, color: Colors.black87),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProductCard {
-  final String name;
-  final String imageUrl;
-  const _ProductCard(this.name, this.imageUrl);
-}
-
-class _ProductTile extends StatelessWidget {
-  final _ProductCard data;
-  const _ProductTile({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 100,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(
-          data.imageUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: const Color(0xFFFFF0CC),
-            child: Center(
-              child: Text(
-                data.name,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SeeMoreCard extends StatelessWidget {
-  final String imageUrl;
-  final String name;
-  const _SeeMoreCard({required this.imageUrl, required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 160,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: const Color(0xFFFFF0CC),
-                  child: const Center(child: Icon(Icons.image, color: Colors.grey)),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.55),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Text(
-                  name,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  post.title,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                    height: 1.3,
                   ),
                 ),
-              ),
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: post.tagBg,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    post.tag,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: post.tagColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBBBBB)),
+        ],
       ),
     );
   }

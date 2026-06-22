@@ -1,74 +1,178 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as path;
-import 'package:http_parser/http_parser.dart'; // Add this for MediaType
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.0.105:8000'; // Your IP
+  static const String baseUrl = 'http://192.168.0.114:9000';
 
   static Future<Map<String, dynamic>> scanLabel(File imageFile) async {
+    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
     try {
-      print('🔵 Connecting to: $baseUrl/scan-label/');
-      print('📸 Original file path: ${imageFile.path}');
+      print('📸 OCR image path: ${imageFile.path}');
 
-      // Get file extension
-      String fileName = path.basename(imageFile.path);
-      String fileExtension = path.extension(imageFile.path).toLowerCase();
+      final inputImage = InputImage.fromFile(imageFile);
+      final recognizedText = await textRecognizer.processImage(inputImage);
 
-      print('📄 File name: $fileName');
-      print('🔤 File extension: $fileExtension');
+      final rawText = recognizedText.text.trim();
 
-      // Ensure it has a proper image extension
-      if (!['.jpg', '.jpeg', '.png', '.gif', '.bmp'].contains(fileExtension)) {
-        // If no valid extension, add .jpg
-        String newPath = imageFile.path + '.jpg';
-        print('⚠️ Adding .jpg extension');
-        await imageFile.copy(newPath);
-        imageFile = File(newPath);
+      print('📝 OCR TEXT: $rawText');
+
+      if (rawText.isEmpty) {
+        throw Exception('No text detected. Please scan ingredients clearly.');
       }
 
-      var uri = Uri.parse('$baseUrl/scan-label/');
-      var request = http.MultipartRequest('POST', uri);
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/test-ocr'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'ocrText': rawText,
+              'scannedText': rawText,
+              'text': rawText,
+              'scanResult': {
+                'ocrText': rawText,
+                'text': rawText,
+              },
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      // Important: Add the file with proper content-type
-      var multipartFile = await http.MultipartFile.fromPath(
-        'file',
-        imageFile.path,
-        filename: 'image.jpg', // Always send as image.jpg
-        contentType: MediaType('image', 'jpeg'),
-      );
+      print('📥 OCR clean status: ${response.statusCode}');
+      print('📥 OCR clean body: ${response.body}');
 
-      request.files.add(multipartFile);
+      final decoded = jsonDecode(response.body);
 
-      print('📤 Sending image...');
-      var streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-      );
-      var response = await http.Response.fromStream(streamedResponse);
-
-      print('📥 Response status: ${response.statusCode}');
-      print('📥 Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('Server error: ${response.body}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          ...decoded,
+          'ocrText': rawText,
+          'scannedText': rawText,
+          'text': rawText,
+          'rawText': rawText,
+        };
       }
+
+      throw Exception(decoded['message'] ?? 'OCR server error');
     } catch (e) {
-      print('❌ Error: $e');
+      print('❌ scanLabel error: $e');
       rethrow;
+    } finally {
+      await textRecognizer.close();
     }
+  }
+
+  static Future<void> saveScanHistory({
+    required String userId,
+    required Map<String, dynamic> scanData,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/scan-history'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer dummy-token',
+          },
+          body: jsonEncode({
+            'userId': userId,
+            'ocrText': scanData['ocrText'] ??
+                scanData['rawText'] ??
+                scanData['text'] ??
+                '',
+            'scannedText': scanData['scannedText'] ??
+                scanData['rawText'] ??
+                scanData['text'] ??
+                '',
+            'ingredients': scanData['ingredients'] ?? [],
+            'scanResult': scanData,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    print('📥 Save history status: ${response.statusCode}');
+    print('📥 Save history body: ${response.body}');
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to save scan history: ${response.body}');
+    }
+  }
+
+  static Future<List<dynamic>> getScanHistory(String userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/scan-history/$userId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer dummy-token',
+      },
+    ).timeout(const Duration(seconds: 15));
+
+    print('📥 History status: ${response.statusCode}');
+    print('📥 History body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      if (data is Map<String, dynamic> && data['history'] is List) {
+        return data['history'];
+      }
+
+      if (data is List) return data;
+
+      return [];
+    }
+
+    throw Exception('Failed to fetch scan history: ${response.body}');
+  }
+
+  static Future<Map<String, dynamic>> analyzeScannedProduct({
+    required String userId,
+    required List<String> ingredients,
+    String productName = 'Scanned Product',
+    String? scanHistoryId,
+    String? rawOcrText,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/analyze-scanned-product'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer dummy-token-$userId',
+          },
+          body: jsonEncode({
+            'userId': userId,
+            'productName': productName,
+            'ingredients': ingredients,
+            if (scanHistoryId != null && scanHistoryId.isNotEmpty)
+              'scanHistoryId': scanHistoryId,
+            if (rawOcrText != null && rawOcrText.isNotEmpty)
+              'rawOcrText': rawOcrText,
+          }),
+        )
+        .timeout(const Duration(seconds: 35));
+
+    final decoded = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 200) {
+      return decoded;
+    }
+
+    throw Exception(
+      decoded['message'] ?? 'Failed to analyze scanned product',
+    );
   }
 
   static Future<bool> testConnection() async {
     try {
-      print('🔍 Testing: $baseUrl/test');
       final response = await http
-          .get(Uri.parse('$baseUrl/test'))
+          .get(Uri.parse('$baseUrl/'))
           .timeout(const Duration(seconds: 5));
 
-      print('📥 Test response: ${response.statusCode}');
       return response.statusCode == 200;
     } catch (e) {
       print('❌ Test failed: $e');

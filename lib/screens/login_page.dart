@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../config/app_config.dart';
+import '../services/session_service.dart';
+import '../utils/validators.dart';
+import 'forgot_password_screen.dart';
 import 'signup_page.dart';
 import 'Homepage.dart';
 import 'onboarding_screens.dart';
@@ -30,10 +33,9 @@ class _LoginPageState extends State<LoginPage> {
   static const Color _teal = Color(0xFF2E8B72);
   static const Color _bg = Color(0xFFF5F9F7);
 
-  // Base URL
-  final String baseUrl = "http://192.168.0.114:9000";
+  String get baseUrl => AppConfig.apiBaseUrl;
 
-  /// LOGIN WITH EMAIL
+
   Future<void> loginWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -54,15 +56,8 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // Save token and user data in SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', data['token'] ?? '');
-        await prefs.setString('user_id', data['user']['_id']);
-        await prefs.setString('user_name', data['user']['fullName']);
-        await prefs.setString('user_email', data['user']['email']);
-        await prefs.setBool('is_logged_in', true);
+        await SessionService.saveUserSession(data);
 
-        // Create userData map with all required fields including id
         final userData = {
           'id': data['user']['_id'],
           'fullName': data['user']['fullName'],
@@ -80,7 +75,6 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
 
-        // Navigate to HomePage with user data
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -117,15 +111,11 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => isLoading = false);
   }
 
-  /// GOOGLE LOGIN - FIXED VERSION
   Future<void> signInWithGoogle() async {
     setState(() => isLoading = true);
 
     try {
-      // Disconnect any existing connection first
-      await _googleSignIn.disconnect();
-
-      // Trigger the authentication flow
+      await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -133,11 +123,8 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // Get authentication details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      // Here you would typically send the token to your backend
-      // For now, we'll create a mock response or send to your API
       final response = await http.post(
         Uri.parse("$baseUrl/api/google-login"),
         headers: {"Content-Type": "application/json"},
@@ -153,15 +140,8 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // Save token and user data in SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', data['token'] ?? '');
-        await prefs.setString('user_id', data['user']['_id']);
-        await prefs.setString('user_name', data['user']['fullName'] ?? googleUser.displayName ?? '');
-        await prefs.setString('user_email', data['user']['email'] ?? googleUser.email);
-        await prefs.setBool('is_logged_in', true);
+        await SessionService.saveUserSession(data);
 
-        // Create userData map with all required fields including id
         final userData = {
           'id': data['user']['_id'],
           'fullName': data['user']['fullName'] ?? googleUser.displayName ?? 'Google User',
@@ -179,7 +159,6 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
 
-        // Navigate to HomePage with user data
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -201,11 +180,8 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } catch (e) {
-      print("Google Sign-In Error: $e");
-
       if (!mounted) return;
 
-      // More user-friendly error message
       String errorMessage = "Google Sign In Failed. ";
       if (e.toString().contains("10")) {
         errorMessage += "Please check your SHA-1 fingerprint in Firebase Console.";
@@ -238,13 +214,11 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             const SizedBox(height: 10),
 
-            /// BACK BUTTON - Now navigates to onboarding
             Align(
               alignment: Alignment.centerLeft,
               child: IconButton(
                 icon: const Icon(Icons.arrow_back_ios),
                 onPressed: () {
-                  // Navigate back to onboarding screens
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => const OnboardingScreen()),
@@ -257,12 +231,10 @@ class _LoginPageState extends State<LoginPage> {
 
             const SizedBox(height: 20),
 
-            /// ATTRACTIVE HEADER SECTION
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  /// Welcome Text
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -287,7 +259,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 24),
 
-                  /// Decorative Line
                   Container(
                     height: 4,
                     width: 60,
@@ -302,7 +273,6 @@ class _LoginPageState extends State<LoginPage> {
 
             const SizedBox(height: 30),
 
-            /// MAIN FORM
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -312,7 +282,6 @@ class _LoginPageState extends State<LoginPage> {
                     key: _formKey,
                     child: Column(
                       children: [
-                        /// LOGO (Smaller, more elegant)
                         Container(
                           height: 100,
                           margin: const EdgeInsets.only(bottom: 20),
@@ -341,15 +310,15 @@ class _LoginPageState extends State<LoginPage> {
 
                         buildPasswordField(),
 
-                        /// Forgot Password
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Forgot Password feature coming soon!'),
-                                  duration: Duration(seconds: 2),
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordScreen(),
                                 ),
                               );
                             },
@@ -368,7 +337,6 @@ class _LoginPageState extends State<LoginPage> {
 
                         const SizedBox(height: 8),
 
-                        /// LOGIN BUTTON
                         SizedBox(
                           width: double.infinity,
                           height: 52,
@@ -422,7 +390,6 @@ class _LoginPageState extends State<LoginPage> {
 
                         const SizedBox(height: 24),
 
-                        /// GOOGLE LOGIN - Improved button
                         GestureDetector(
                           onTap: isLoading ? null : signInWithGoogle,
                           child: Container(
@@ -442,21 +409,24 @@ class _LoginPageState extends State<LoginPage> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                // Google G Logo
-                                Image.network(
-                                  'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                                  height: 24,
+                                Container(
                                   width: 24,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Text(
-                                      "G",
-                                      style: TextStyle(
-                                        color: _teal,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    );
-                                  },
+                                  height: 24,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    "G",
+                                    style: TextStyle(
+                                      color: Color(0xFF4285F4),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
@@ -474,12 +444,11 @@ class _LoginPageState extends State<LoginPage> {
 
                         const SizedBox(height: 32),
 
-                        /// SIGNUP NAVIGATION
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              "New to NutriScan? ",
+                              "New to CalorieMate? ",
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[700],
@@ -521,7 +490,6 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  /// EMAIL FIELD
   Widget buildField(String label, TextEditingController controller, IconData icon) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -539,15 +507,7 @@ class _LoginPageState extends State<LoginPage> {
           controller: controller,
           style: const TextStyle(fontSize: 15),
           keyboardType: TextInputType.emailAddress,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter $label';
-            }
-            if (label == "Email Address" && !value.contains('@')) {
-              return 'Enter a valid email address';
-            }
-            return null;
-          },
+          validator: AppValidators.email,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
@@ -577,7 +537,6 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  /// PASSWORD FIELD
   Widget buildPasswordField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -595,15 +554,7 @@ class _LoginPageState extends State<LoginPage> {
           controller: password,
           obscureText: hidePassword,
           style: const TextStyle(fontSize: 15),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter password';
-            }
-            if (value.length < 6) {
-              return 'Password must be at least 6 characters';
-            }
-            return null;
-          },
+          validator: AppValidators.password,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,

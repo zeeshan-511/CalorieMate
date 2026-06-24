@@ -9,6 +9,12 @@ import 'api_service.dart';
 import 'analysis_report_screen.dart';
 import 'reports_screen.dart';
 import 'health_dashboard_screen.dart';
+import '../config/app_config.dart';
+import '../services/session_service.dart';
+import 'ScanHistory.dart';
+import 'Setting.dart';
+import 'my_preferences.dart' as myprefs;
+import 'view_preferences.dart';
 
 class ResultScreen extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -33,7 +39,7 @@ class _ResultScreenState extends State<ResultScreen> {
   String _intelligenceError = '';
   Map<String, dynamic>? _intelligence;
 
-  static const String apiBaseUrl = 'http://192.168.0.114:9000';
+  static String get apiBaseUrl => AppConfig.apiBaseUrl;
 
   static const Color _teal = Color(0xFF2E8B72);
   static const Color _bg = Color(0xFFF5F9F7);
@@ -131,8 +137,7 @@ class _ResultScreenState extends State<ResultScreen> {
         if (!mounted) return;
         setState(() {
           _cleanedIngredients = [];
-          _ocrError =
-              decoded['message']?.toString() ??
+          _ocrError = decoded['message']?.toString() ??
               'This does not look like a food ingredients label. Please scan the product ingredients section only.';
           _isCleaningOcr = false;
         });
@@ -150,8 +155,7 @@ class _ResultScreenState extends State<ResultScreen> {
         if (!mounted) return;
         setState(() {
           _cleanedIngredients = [];
-          _ocrError =
-              decoded['message']?.toString() ??
+          _ocrError = decoded['message']?.toString() ??
               'Failed to process scan. Please try again.';
           _isCleaningOcr = false;
         });
@@ -254,12 +258,10 @@ class _ResultScreenState extends State<ResultScreen> {
       final result = await ApiService.analyzeScannedProduct(
         userId: currentUserId,
         ingredients: ingredients,
-        scanHistoryId: scanHistoryId.isNotEmpty
-            ? scanHistoryId
-            : _scanHistoryId,
-        rawOcrText: rawOcrText.isNotEmpty
-            ? rawOcrText
-            : _getRawOcrText(widget.data),
+        scanHistoryId:
+            scanHistoryId.isNotEmpty ? scanHistoryId : _scanHistoryId,
+        rawOcrText:
+            rawOcrText.isNotEmpty ? rawOcrText : _getRawOcrText(widget.data),
       );
       if (!mounted) return;
       setState(() {
@@ -285,7 +287,7 @@ class _ResultScreenState extends State<ResultScreen> {
     try {
       final membersResponse = await http.get(
         Uri.parse(
-          'http://192.168.1.46:9000/api/family-members/$userId/connected',
+          '$apiBaseUrl/api/family-members/$userId/connected',
         ),
         headers: {
           'Content-Type': 'application/json',
@@ -298,9 +300,8 @@ class _ResultScreenState extends State<ResultScreen> {
       if (membersResponse.statusCode != 200) {
         throw Exception(decoded['message'] ?? 'Unable to load family members');
       }
-      final rawMembers = decoded['members'] is List
-          ? decoded['members'] as List
-          : <dynamic>[];
+      final rawMembers =
+          decoded['members'] is List ? decoded['members'] as List : <dynamic>[];
       final members = rawMembers
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -353,7 +354,7 @@ class _ResultScreenState extends State<ResultScreen> {
       final product = _map(_intelligence!['productIdentification']);
       final suitability = _map(_intelligence!['suitability']);
       final response = await http.post(
-        Uri.parse('http://192.168.1.46:9000/api/shared-content'),
+        Uri.parse('$apiBaseUrl/api/shared-content'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer dummy-token-$userId',
@@ -395,7 +396,7 @@ class _ResultScreenState extends State<ResultScreen> {
     try {
       final product = _map(_intelligence!['productIdentification']);
       final response = await http.post(
-        Uri.parse('http://192.168.1.46:9000/api/product-feedback'),
+        Uri.parse('$apiBaseUrl/api/product-feedback'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer dummy-token-$userId',
@@ -653,11 +654,8 @@ class _ResultScreenState extends State<ResultScreen> {
     final recommended = suitability['isRecommended'] == true;
     final decisionColor = recommended ? _teal : const Color(0xFFB33A3A);
     final halalStatus = _text(halal['status'], 'Doubtful');
-    final halalConfidence = _number(halal['confidence']);
     final halalColor = _halalColor(halalStatus);
-    final halalValue = halalConfidence > 0
-        ? '$halalStatus (${(halalConfidence * 100).round()}%)'
-        : halalStatus;
+    final halalValue = halalStatus;
     final harmfulNames = _stringList(safety['harmfulIngredients']);
     final detectedAllergenNames = _list(allergens['detected'])
         .map((rawAllergen) {
@@ -733,8 +731,8 @@ class _ResultScreenState extends State<ResultScreen> {
                             product['identified'] == true
                                 ? '${_text(product['subCategory'], _text(product['category'], 'Food product'))} | ${_text(product['confidenceLevel'], 'Moderate')} confidence'
                                 : product['categoryInferred'] == true
-                                ? 'Category identified as ${_text(product['subCategory'], _text(product['category'], 'Food product'))}; product name was not guessed.'
-                                : 'No reliable product match. The ingredient report is still available.',
+                                    ? 'Category identified as ${_text(product['subCategory'], _text(product['category'], 'Food product'))}; product name was not guessed.'
+                                    : 'No reliable product match. The ingredient report is still available.',
                             style: const TextStyle(
                               fontSize: 12,
                               color: Colors.black54,
@@ -1015,8 +1013,17 @@ class _ResultScreenState extends State<ResultScreen> {
               children: [
                 const _ReportHeader(
                   icon: Icons.list_alt_outlined,
-                  title: 'Ingredient breakdown',
+                  title: 'Ingredients information',
                   color: _teal,
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Clear details from the scanned label and ingredient knowledge base.',
+                  style: TextStyle(
+                    color: Colors.black54,
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 if (details.isEmpty)
@@ -1027,103 +1034,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 else
                   ...details.map((rawDetail) {
                     final detail = _map(rawDetail);
-                    final status = _text(detail['safetyStatus'], 'Moderate');
-                    final color = _safetyColor(status);
-                    final compliance = _map(detail['compliance']);
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: color.withOpacity(0.28)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ExpansionTile(
-                        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-                        childrenPadding: const EdgeInsets.fromLTRB(
-                          12,
-                          0,
-                          12,
-                          12,
-                        ),
-                        title: Text(
-                          _text(detail['name'], 'Ingredient'),
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text(
-                          _text(
-                            detail['simpleExplanation'],
-                            _text(detail['purpose'], 'Food ingredient'),
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11.5),
-                        ),
-                        trailing: _ReportChip(text: status, color: color),
-                        children: [
-                          _DetailText(
-                            label: 'Category',
-                            value: _text(detail['category'], 'Food ingredient'),
-                          ),
-                          _DetailText(
-                            label: 'What it does',
-                            value: _text(
-                              detail['simpleExplanation'],
-                              _text(detail['purpose'], 'Not available'),
-                            ),
-                          ),
-                          _DetailText(
-                            label: 'Safety reason',
-                            value: _text(
-                              detail['safetyReason'],
-                              'Use normal dietary caution.',
-                            ),
-                          ),
-                          _DetailText(
-                            label: 'Halal status',
-                            value: _number(detail['halalConfidence']) > 0
-                                ? '${_text(detail['halalStatus'], 'Doubtful')} (${(_number(detail['halalConfidence']) * 100).round()}%)'
-                                : _text(detail['halalStatus'], 'Doubtful'),
-                          ),
-                          if (_text(detail['halalReason'], '').isNotEmpty)
-                            _DetailText(
-                              label: 'Halal reason',
-                              value: _text(detail['halalReason'], ''),
-                            ),
-                          if (_stringList(detail['halalTriggers']).isNotEmpty)
-                            _DetailText(
-                              label: 'Halal markers',
-                              value: _stringList(
-                                detail['halalTriggers'],
-                              ).join(', '),
-                            ),
-                          if (_stringList(detail['eCodes']).isNotEmpty)
-                            _DetailText(
-                              label: 'Additive codes',
-                              value: _stringList(detail['eCodes']).join(', '),
-                            ),
-                          if (_stringList(detail['healthEffects']).isNotEmpty)
-                            _DetailText(
-                              label: 'Health effects',
-                              value: _stringList(
-                                detail['healthEffects'],
-                              ).join(' '),
-                            ),
-                          if (_stringList(detail['authorityNotes']).isNotEmpty)
-                            _DetailText(
-                              label: 'Food authority guidance',
-                              value: _stringList(
-                                detail['authorityNotes'],
-                              ).join(' '),
-                            ),
-                          if (compliance.isNotEmpty)
-                            ...compliance.entries.map(
-                              (entry) => _DetailText(
-                                label: entry.key.toUpperCase(),
-                                value: entry.value.toString(),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
+                    return _buildIngredientInsightCard(detail);
                   }),
               ],
             ),
@@ -1247,9 +1158,8 @@ class _ResultScreenState extends State<ResultScreen> {
                   final altSuitability = _map(alternative['suitability']);
                   final altHalal = _map(alternative['halal']);
                   final fullySuitable = alternative['fullySuitable'] == true;
-                  final alternativeColor = fullySuitable
-                      ? _teal
-                      : const Color(0xFFD99A23);
+                  final alternativeColor =
+                      fullySuitable ? _teal : const Color(0xFFD99A23);
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
@@ -1342,6 +1252,214 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
       ),
       child: child,
+    );
+  }
+
+  Widget _buildIngredientInsightCard(Map<String, dynamic> detail) {
+    final name = _text(detail['name'], 'Ingredient');
+    final scannedName = _text(detail['scannedName'], '');
+    final category = _text(detail['category'], 'Food ingredient');
+    final status = _text(detail['safetyStatus'], 'Moderate');
+    final safetyColor = _safetyColor(status);
+    final halalStatus = _text(detail['halalStatus'], 'Doubtful');
+    final halalColor = _halalColor(halalStatus);
+    final explanation = _text(
+      detail['simpleExplanation'],
+      _text(detail['purpose'], 'Used as part of the product recipe.'),
+    );
+    final healthEffects = _stringList(detail['healthEffects']);
+    final additiveCodes = _stringList(detail['eCodes']);
+    final halalMarkers = _stringList(detail['halalTriggers']);
+    final showScannedName = scannedName.isNotEmpty &&
+        scannedName.toLowerCase() != name.toLowerCase();
+    var expanded = false;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFAFCFB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.black.withOpacity(0.07)),
+        ),
+        child: IntrinsicHeight(
+          child: StatefulBuilder(
+            builder: (context, setCardState) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(width: 5, color: safetyColor),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => setCardState(
+                              () => expanded = !expanded,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: safetyColor.withOpacity(0.11),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.spa_outlined,
+                                    color: safetyColor,
+                                    size: 19,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        explanation,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.black54,
+                                          fontSize: 12,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _buildIngredientChipScroller(
+                                        status: status,
+                                        safetyColor: safetyColor,
+                                        halalStatus: halalStatus,
+                                        halalColor: halalColor,
+                                        category: category,
+                                        additiveCodes: additiveCodes,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  expanded
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
+                                  color: Colors.black54,
+                                  size: 22,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (expanded) ...[
+                            const SizedBox(height: 12),
+                            Divider(
+                              height: 1,
+                              color: Colors.black.withOpacity(0.08),
+                            ),
+                            const SizedBox(height: 12),
+                            if (showScannedName)
+                              _DetailText(
+                                label: 'Scanned as',
+                                value: scannedName,
+                              ),
+                            _DetailText(label: 'Category', value: category),
+                            _DetailText(
+                              label: 'What it does',
+                              value: explanation,
+                            ),
+                            _DetailText(
+                              label: 'Safety analysis',
+                              value: _text(
+                                detail['safetyReason'],
+                                'Use normal dietary caution.',
+                              ),
+                            ),
+                            if (healthEffects.isNotEmpty)
+                              _DetailText(
+                                label: 'Health impact',
+                                value: healthEffects.join(' '),
+                              ),
+                            _DetailText(
+                              label: 'Halal status',
+                              value: halalStatus,
+                            ),
+                            if (_text(detail['halalReason'], '').isNotEmpty)
+                              _DetailText(
+                                label: 'Halal analysis',
+                                value: _text(detail['halalReason'], ''),
+                              ),
+                            if (halalMarkers.isNotEmpty)
+                              _DetailText(
+                                label: 'Halal markers',
+                                value: halalMarkers.join(', '),
+                              ),
+                            if (additiveCodes.isNotEmpty)
+                              _DetailText(
+                                label: 'Additive codes',
+                                value: additiveCodes.join(', '),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIngredientChipScroller({
+    required String status,
+    required Color safetyColor,
+    required String halalStatus,
+    required Color halalColor,
+    required String category,
+    required List<String> additiveCodes,
+  }) {
+    return SizedBox(
+      height: 27,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _ReportChip(text: status, color: safetyColor),
+            const SizedBox(width: 6),
+            _ReportChip(text: halalStatus, color: halalColor),
+            const SizedBox(width: 6),
+            _ReportChip(text: category, color: _teal),
+            ...additiveCodes.take(2).expand<Widget>(
+                  (code) => [
+                    const SizedBox(width: 6),
+                    _ReportChip(
+                      text: code,
+                      color: const Color(0xFF185FA5),
+                    ),
+                  ],
+                ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1462,13 +1580,15 @@ class _ResultScreenState extends State<ResultScreen> {
                         ),
                       ),
                     );
-                  } else if (i != _selectedNav) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${navItems[i]['label']} feature coming soon!',
+                  } else if (i == 4) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SettingsScreen(
+                          userId: userId,
+                          userName: userName,
+                          userEmail: userEmail,
                         ),
-                        duration: const Duration(seconds: 1),
                       ),
                     );
                   }
@@ -1802,8 +1922,7 @@ class AppDrawer extends StatelessWidget {
   static const Color _teal = Color(0xFF2E8B72);
 
   Future<void> _logout(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await SessionService.clearSession();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -1883,16 +2002,16 @@ class AppDrawer extends StatelessWidget {
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    const _DrawerItem(
+                    _DrawerItem(
                       icon: Icons.qr_code_scanner,
                       label: 'Scan',
+                      onTap: () => Navigator.pop(context),
                     ),
                     _divider(),
                     _DrawerItem(
                       icon: Icons.people_outline,
                       label: 'Family Profile',
                       onTap: () {
-                        Navigator.pop(context);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -1905,24 +2024,74 @@ class AppDrawer extends StatelessWidget {
                       },
                     ),
                     _divider(),
-                    const _DrawerItem(
+                    _DrawerItem(
                       icon: Icons.history,
                       label: 'Scan History',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ScanHistoryScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _divider(),
-                    const _DrawerItem(
+                    _DrawerItem(
                       icon: Icons.tune,
                       label: 'Set Preferences',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                myprefs.AdditivesPreferencesScreen(
+                              userName: userName,
+                              userEmail: userEmail,
+                              userId: userId,
+                              preferences: myprefs.UserPreferences(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _divider(),
-                    const _DrawerItem(
+                    _DrawerItem(
                       icon: Icons.list_alt_outlined,
                       label: 'My Preferences',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ViewPreferencesScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _divider(),
-                    const _DrawerItem(
+                    _DrawerItem(
                       icon: Icons.settings_outlined,
                       label: 'Settings',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SettingsScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _divider(),
                   ],
@@ -1930,12 +2099,10 @@ class AppDrawer extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
-                child: GestureDetector(
+                child: _DrawerItem(
+                  icon: Icons.logout,
+                  label: 'Log Out',
                   onTap: () => _logout(context),
-                  child: const _DrawerItem(
-                    icon: Icons.logout,
-                    label: 'Log Out',
-                  ),
                 ),
               ),
             ],
@@ -1946,11 +2113,11 @@ class AppDrawer extends StatelessWidget {
   }
 
   Widget _divider() => Divider(
-    color: Colors.white.withOpacity(0.25),
-    height: 1,
-    indent: 24,
-    endIndent: 24,
-  );
+        color: Colors.white.withOpacity(0.25),
+        height: 1,
+        indent: 24,
+        endIndent: 24,
+      );
 }
 
 class _DrawerItem extends StatelessWidget {
@@ -1987,7 +2154,7 @@ class _DrawerItem extends StatelessWidget {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$label feature coming soon!'),
+              content: Text('$label is unavailable right now.'),
               duration: const Duration(seconds: 1),
             ),
           );

@@ -39,7 +39,7 @@ async def scan_label(
     Optional allergen validation.
     """
     try:
-        # Validate file type
+
         allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/bmp']
         if file.content_type not in allowed_types:
             raise HTTPException(
@@ -47,11 +47,11 @@ async def scan_label(
                 detail=f"Invalid file type. Allowed: {allowed_types}"
             )
 
-        # Read file as bytes
+
         image_bytes = await file.read()
         print(f"📥 Received: {file.filename}, Size: {len(image_bytes)} bytes, Type: {file.content_type}")
 
-        # Quick validation using OpenCV
+
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -61,15 +61,15 @@ async def scan_label(
                 detail="File could not be decoded as an image. Please send a valid image file."
             )
 
-        # Get image properties
+
         height, width = img.shape[:2]
         print(f"📏 Image dimensions: {width}x{height}")
 
-        # Call OCR service with enhanced extraction
-        extracted_text = ocr_service.extract_text_from_image(image_bytes)
-        print(f"📝 Extracted text: {extracted_text[:100]}...")  # Log first 100 chars
 
-        # Extract structured ingredients
+        extracted_text = ocr_service.extract_text_from_image(image_bytes)
+        print(f"📝 Extracted text: {extracted_text[:100]}...")
+
+
         ingredients_result = ocr_service.extract_ingredients(extracted_text)
 
         response = {
@@ -85,7 +85,7 @@ async def scan_label(
             }
         }
 
-        # Optional allergen validation
+
         if validate_allergens and ingredients_result["ingredients"]:
             allergen_analysis = ocr_service.validate_ingredients(ingredients_result["ingredients"])
             response["allergen_analysis"] = allergen_analysis
@@ -112,19 +112,19 @@ async def scan_label_debug(file: UploadFile = File(...)):
         if img is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
 
-        # Test different preprocessing methods
+
         results = []
 
-        # Original image
+
         pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         text1 = pytesseract.image_to_string(pil_img, config='--oem 3 --psm 6')
 
-        # Grayscale
+
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         pil_gray = Image.fromarray(gray)
         text2 = pytesseract.image_to_string(pil_gray, config='--oem 3 --psm 6')
 
-        # Thresholded
+
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         pil_thresh = Image.fromarray(thresh)
         text3 = pytesseract.image_to_string(pil_thresh, config='--oem 3 --psm 6')
@@ -135,7 +135,7 @@ async def scan_label_debug(file: UploadFile = File(...)):
             "threshold": text3.strip()
         }
 
-        # Find best result (longest text)
+
         best_method = max(results.items(), key=lambda x: len(x[1]))
 
         return JSONResponse(status_code=200, content={

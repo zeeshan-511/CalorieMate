@@ -1,12 +1,18 @@
 import 'dart:convert';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'homepage.dart';
+import 'health_dashboard_screen.dart';
+import 'reports_screen.dart';
+import 'scan_screen.dart';
+import 'Setting.dart';
 import 'simple_preferences_editor.dart';
+import '../config/app_config.dart';
 
-// ─────────────────────────────────────────────
-//  THEME CONSTANTS
-// ─────────────────────────────────────────────
+
+
+
 const Color kPrimary = Color(0xFF2D7D6F);
 const Color kPrimaryLight = Color(0xFF3A9E8D);
 const Color kBgCream = Color(0xFFF5F0E8);
@@ -17,11 +23,11 @@ const Color kTextDark = Color(0xFF1A1A1A);
 const Color kTextMid = Color(0xFF4A4A4A);
 const Color kTextLight = Color(0xFF8A8A8A);
 
-const String kApiBaseUrl = 'http://192.168.0.114:9000';
+String get kApiBaseUrl => AppConfig.apiBaseUrl;
 
-// ─────────────────────────────────────────────
-//  CATEGORY STEP MODEL
-// ─────────────────────────────────────────────
+
+
+
 enum PreferenceCategory {
   allergens,
   additive,
@@ -57,9 +63,9 @@ const _visiblePreferenceCategories = [
   PreferenceCategory.nutrition,
 ];
 
-// ─────────────────────────────────────────────
-//  PREFERENCES DATA MODEL
-// ─────────────────────────────────────────────
+
+
+
 class UserPreferences {
   Set<String> allergens;
   List<String> customAllergens;
@@ -266,9 +272,9 @@ class PreferenceApiService {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SHARED WIDGETS
-// ─────────────────────────────────────────────
+
+
+
 class _PrefsAppBar extends StatelessWidget {
   final VoidCallback? onBackPressed;
   final bool showBackButton;
@@ -827,9 +833,9 @@ class _SectionDivider extends StatelessWidget {
       Divider(height: 1, color: Colors.grey.shade200);
 }
 
-// ─────────────────────────────────────────────
-//  PREFERENCES WRAPPER
-// ─────────────────────────────────────────────
+
+
+
 class PreferencePageWrapper extends StatefulWidget {
   final Widget child;
   final String userName;
@@ -852,16 +858,32 @@ class PreferencePageWrapper extends StatefulWidget {
 
 class _PreferencePageWrapperState extends State<PreferencePageWrapper> {
   late int _selectedNav;
+  List<CameraDescription>? _cameras;
 
   @override
   void initState() {
     super.initState();
     _selectedNav = widget.currentIndex;
+    _initializeCameras();
   }
 
-  void _navigateToScan() {
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera feature coming soon!')));
+  Future<void> _initializeCameras() async {
+    try {
+      _cameras = await availableCameras();
+    } catch (_) {}
+  }
+
+  Future<void> _navigateToScan() async {
+    if (_cameras == null || _cameras!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No cameras available')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ScanScreen(camera: _cameras!.first)),
+    );
   }
 
   @override
@@ -917,15 +939,49 @@ class _PreferencePageWrapperState extends State<PreferencePageWrapper> {
                   } else if (i == 0) {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => const HomePage()),
+                      MaterialPageRoute(
+                        builder: (_) => HomePage(
+                          userData: {
+                            'id': widget.userId,
+                            'fullName': widget.userName,
+                            'email': widget.userEmail,
+                          },
+                        ),
+                      ),
                       (route) => false,
                     );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              '${navItems[i]['label']} feature coming soon!'),
-                          duration: const Duration(seconds: 1)),
+                  } else if (i == 2) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReportsScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
+                        ),
+                      ),
+                    );
+                  } else if (i == 3) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HealthDashboardScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
+                        ),
+                      ),
+                    );
+                  } else if (i == 4) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SettingsScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
+                        ),
+                      ),
                     );
                   }
                 },
@@ -982,9 +1038,9 @@ class _PreferencePageWrapperState extends State<PreferencePageWrapper> {
   }
 }
 
-// ─────────────────────────────────────────────
-//  START SCREEN: ALWAYS OPEN ALLERGENS FIRST
-// ─────────────────────────────────────────────
+
+
+
 class PreferencesStartScreen extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -1236,9 +1292,9 @@ class _PreferenceStepScaffoldState extends State<_PreferenceStepScaffold> {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SCREEN 1: ALLERGENS
-// ─────────────────────────────────────────────
+
+
+
 class AllergensPreferencesScreen extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -1313,9 +1369,9 @@ class AllergensPreferencesScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SCREEN 2: ADDITIVES
-// ─────────────────────────────────────────────
+
+
+
 class AdditivesPreferencesScreen extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -1388,9 +1444,9 @@ class AdditivesPreferencesScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SCREEN 3: DIET
-// ─────────────────────────────────────────────
+
+
+
 class DietPreferencesScreen extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -1453,9 +1509,9 @@ class DietPreferencesScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SCREEN 4: INGREDIENTS
-// ─────────────────────────────────────────────
+
+
+
 class IngredientsPreferencesScreen extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -1516,9 +1572,9 @@ class IngredientsPreferencesScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SCREEN 5: NUTRITION
-// ─────────────────────────────────────────────
+
+
+
 class NutritionalPreferencesScreen extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -1583,9 +1639,9 @@ class NutritionalPreferencesScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  SCREEN 6: CONFIRMATION
-// ─────────────────────────────────────────────
+
+
+
 class AdvancedPreferencesScreen extends StatefulWidget {
   final String userName;
   final String userEmail;

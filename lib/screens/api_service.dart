@@ -1,24 +1,26 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:http/http.dart' as http;
 
+import '../config/app_config.dart';
+
 class ApiService {
-  static const String baseUrl = 'http://192.168.0.114:9000';
+  static String get baseUrl => AppConfig.apiBaseUrl;
 
   static Future<Map<String, dynamic>> scanLabel(File imageFile) async {
     final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
     try {
-      print('📸 OCR image path: ${imageFile.path}');
+      debugPrint('OCR image path: ${imageFile.path}');
 
       final inputImage = InputImage.fromFile(imageFile);
       final recognizedText = await textRecognizer.processImage(inputImage);
-
       final rawText = recognizedText.text.trim();
 
-      print('📝 OCR TEXT: $rawText');
+      debugPrint('OCR text: $rawText');
 
       if (rawText.isEmpty) {
         throw Exception('No text detected. Please scan ingredients clearly.');
@@ -42,8 +44,8 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 30));
 
-      print('📥 OCR clean status: ${response.statusCode}');
-      print('📥 OCR clean body: ${response.body}');
+      debugPrint('OCR clean status: ${response.statusCode}');
+      debugPrint('OCR clean body: ${response.body}');
 
       final decoded = jsonDecode(response.body);
 
@@ -59,7 +61,7 @@ class ApiService {
 
       throw Exception(decoded['message'] ?? 'OCR server error');
     } catch (e) {
-      print('❌ scanLabel error: $e');
+      debugPrint('scanLabel error: $e');
       rethrow;
     } finally {
       await textRecognizer.close();
@@ -93,8 +95,8 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 15));
 
-    print('📥 Save history status: ${response.statusCode}');
-    print('📥 Save history body: ${response.body}');
+    debugPrint('Save history status: ${response.statusCode}');
+    debugPrint('Save history body: ${response.body}');
 
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Failed to save scan history: ${response.body}');
@@ -110,8 +112,8 @@ class ApiService {
       },
     ).timeout(const Duration(seconds: 15));
 
-    print('📥 History status: ${response.statusCode}');
-    print('📥 History body: ${response.body}');
+    debugPrint('History status: ${response.statusCode}');
+    debugPrint('History body: ${response.body}');
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -175,7 +177,7 @@ class ApiService {
 
       return response.statusCode == 200;
     } catch (e) {
-      print('❌ Test failed: $e');
+      debugPrint('Connection test failed: $e');
       return false;
     }
   }

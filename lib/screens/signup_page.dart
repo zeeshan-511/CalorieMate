@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/app_config.dart';
+import '../services/session_service.dart';
+import '../utils/validators.dart';
+import 'Homepage.dart';
 import 'login_page.dart';
 import 'onboarding_screens.dart';
 
@@ -44,17 +48,17 @@ class _SignUpPageState extends State<SignUpPage> {
 
     try {
 
-      final url = Uri.parse("http://192.168.0.114:9000/register");
+      final url = Uri.parse("${AppConfig.apiBaseUrl}/register");
 
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "fullName": fullName.text,
-          "email": email.text,
+          "fullName": fullName.text.trim(),
+          "email": email.text.trim(),
           "password": password.text,
-          "mobileNumber": mobile.text,
-          "dateOfBirth": dob.text,
+          "mobileNumber": mobile.text.trim(),
+          "dateOfBirth": dob.text.trim(),
         }),
       );
 
@@ -143,8 +147,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
     try {
 
-      await _googleSignIn.disconnect();
-
+      await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -170,17 +173,19 @@ class _SignUpPageState extends State<SignUpPage> {
           ),
         );
 
+        final userData = await SessionService.currentUserData();
+
+        if (!mounted) return;
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const LoginPage(),
+            builder: (context) => HomePage(userData: userData),
           ),
         );
       }
 
     } catch (e) {
-
-      print("Google Sign-In Error: $e");
 
       if (mounted) {
         String errorMessage = "Google Sign In Failed. ";
@@ -216,7 +221,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> sendUserToServer(String name, String email, String googleId, String? idToken) async {
 
-    final url = Uri.parse("http://192.168.1.46:9000/register");
+    final url = Uri.parse("${AppConfig.apiBaseUrl}/api/google-login");
 
     final response = await http.post(
       url,
@@ -232,6 +237,9 @@ class _SignUpPageState extends State<SignUpPage> {
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception("Failed to save user data");
     }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    await SessionService.saveUserSession(data);
   }
 
   @override
@@ -249,7 +257,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
                 const SizedBox(height: 10),
 
-                /// BACK BUTTON
                 IconButton(
                   icon: const Icon(Icons.arrow_back_ios),
                   onPressed: () {
@@ -265,7 +272,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
                 const SizedBox(height: 20),
 
-                /// ATTRACTIVE HEADER SECTION
                 Column(
                   children: [
                     const Align(
@@ -292,7 +298,6 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    /// Decorative Line
                     Container(
                       height: 4,
                       width: 60,
@@ -306,7 +311,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
                 const SizedBox(height: 30),
 
-                /// LOGO - NO ROUND BACKGROUND
                 Center(
                   child: Image.asset(
                     "assets/images/Logo.png",
@@ -341,7 +345,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
                       const SizedBox(height: 24),
 
-                      /// SIGNUP BUTTON
                       SizedBox(
                         width: double.infinity,
                         height: 52,
@@ -395,7 +398,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
                       const SizedBox(height: 24),
 
-                      /// GOOGLE SIGN UP
                       GestureDetector(
                         onTap: isLoading ? null : signInWithGoogle,
                         child: Container(
@@ -439,7 +441,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
                       const SizedBox(height: 32),
 
-                      /// LOGIN NAVIGATION
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -512,16 +513,9 @@ class _SignUpPageState extends State<SignUpPage> {
           TextInputType.text,
 
           validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter $label';
-            }
-            if (label == "Email Address" && !value.contains('@')) {
-              return 'Enter a valid email address';
-            }
-            if (label == "Mobile Number" && value.length < 10) {
-              return 'Enter a valid mobile number';
-            }
-            return null;
+            if (label == "Email Address") return AppValidators.email(value);
+            if (label == "Mobile Number") return AppValidators.mobile(value);
+            return AppValidators.requiredText(value, label);
           },
 
           decoration: InputDecoration(
@@ -577,13 +571,7 @@ class _SignUpPageState extends State<SignUpPage> {
           style: const TextStyle(fontSize: 15),
 
           validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter password';
-            }
-            if (value.length < 6) {
-              return 'Password must be at least 6 characters';
-            }
-            return null;
+            return AppValidators.strongPassword(value);
           },
 
           decoration: InputDecoration(

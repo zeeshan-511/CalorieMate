@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
 import 'homepage.dart';
 import 'family_members_preferences.dart';
+import 'scan_screen.dart';
+import 'ScanHistory.dart';
 
 class ViewFamilyMembersPreferencesScreen extends StatefulWidget {
   final String userId;
@@ -24,11 +27,45 @@ class _ViewFamilyMembersPreferencesScreenState
   bool isLoading = true;
   List<Map<String, dynamic>> members = [];
   Map<String, UserPreferences?> memberPreferences = {};
+  List<CameraDescription>? _cameras;
 
   @override
   void initState() {
     super.initState();
     loadFamilyMembersWithPreferences();
+    _initializeCameras();
+  }
+
+  Future<void> _initializeCameras() async {
+    try {
+      _cameras = await availableCameras();
+    } catch (_) {}
+  }
+
+  Future<void> _openScan() async {
+    if (_cameras == null || _cameras!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No cameras available')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ScanScreen(camera: _cameras!.first)),
+    );
+  }
+
+  void _openScanHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScanHistoryScreen(
+          userId: widget.userId,
+          userName: widget.userName,
+          userEmail: widget.userEmail,
+        ),
+      ),
+    );
   }
 
   Future<void> loadFamilyMembersWithPreferences() async {
@@ -345,11 +382,7 @@ class _ViewFamilyMembersPreferencesScreenState
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Scan feature coming soon!')),
-                );
-              },
+              onPressed: _openScan,
               icon: const Icon(Icons.qr_code_scanner, size: 18),
               label: const Text('Scan'),
               style: _outlineButtonStyle(),
@@ -359,11 +392,7 @@ class _ViewFamilyMembersPreferencesScreenState
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Scan history coming soon!')),
-                );
-              },
+              onPressed: _openScanHistory,
               icon: const Icon(Icons.history, size: 18),
               label: const Text('Scan History'),
               style: _outlineButtonStyle(),

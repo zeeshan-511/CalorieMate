@@ -7,10 +7,15 @@ import 'package:camera/camera.dart';
 import 'Homepage.dart';
 import 'scan_screen.dart';
 import 'family_members_preferences.dart';
+import '../config/app_config.dart';
+import 'health_dashboard_screen.dart';
+import 'reports_screen.dart';
+import 'Setting.dart';
+import 'ScanHistory.dart';
 
-// ─────────────────────────────────────────────
-// THEME CONSTANTS - SAME STYLE AS VIEW PREFERENCES PAGE
-// ─────────────────────────────────────────────
+
+
+
 const Color kPrimary = Color(0xFF2D7D6F);
 const Color kPrimaryLight = Color(0xFF3A9E8D);
 const Color kBgCream = Color(0xFFF5F0E8);
@@ -22,11 +27,11 @@ const Color kTextMid = Color(0xFF4A4A4A);
 const Color kTextLight = Color(0xFF8A8A8A);
 const Color kDanger = Color(0xFFE74C3C);
 
-const String apiBaseUrl = 'http://192.168.0.114:9000';
+String get apiBaseUrl => AppConfig.apiBaseUrl;
 
-// ─────────────────────────────────────────────
-// DATA MODEL
-// ─────────────────────────────────────────────
+
+
+
 class FamilyMember {
   final String id;
   final String name;
@@ -107,9 +112,9 @@ class FamilyMember {
   }
 }
 
-// ─────────────────────────────────────────────
-// SAME BOTTOM NAVIGATION BAR AS VIEW PREFERENCES PAGE
-// ─────────────────────────────────────────────
+
+
+
 class AppBottomNav extends StatefulWidget {
   final int selectedIndex;
 
@@ -213,19 +218,50 @@ class _AppBottomNavState extends State<AppBottomNav> {
               final isScan = i == 1;
 
               return GestureDetector(
-                onTap: () {
+                onTap: () async {
                   setState(() => _selectedNav = i);
 
                   if (i == 0) {
                     _navigateToHome();
                   } else if (isScan) {
                     _navigateToScan();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            '${navItems[i]['label']} feature coming soon!'),
-                        duration: const Duration(seconds: 1),
+                  } else if (i == 2) {
+                    final prefs = await SharedPreferences.getInstance();
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReportsScreen(
+                          userId: prefs.getString('user_id') ?? '',
+                          userName: prefs.getString('user_name') ?? 'User',
+                          userEmail: prefs.getString('user_email') ?? '',
+                        ),
+                      ),
+                    );
+                  } else if (i == 3) {
+                    final prefs = await SharedPreferences.getInstance();
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HealthDashboardScreen(
+                          userId: prefs.getString('user_id') ?? '',
+                          userName: prefs.getString('user_name') ?? 'User',
+                          userEmail: prefs.getString('user_email') ?? '',
+                        ),
+                      ),
+                    );
+                  } else if (i == 4) {
+                    final prefs = await SharedPreferences.getInstance();
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SettingsScreen(
+                          userId: prefs.getString('user_id') ?? '',
+                          userName: prefs.getString('user_name') ?? 'User',
+                          userEmail: prefs.getString('user_email') ?? '',
+                        ),
                       ),
                     );
                   }
@@ -289,9 +325,9 @@ class _AppBottomNavState extends State<AppBottomNav> {
   }
 }
 
-// ─────────────────────────────────────────────
-// FAMILY PROFILE SETUP SCREEN
-// ─────────────────────────────────────────────
+
+
+
 class FamilyProfileSetupScreen extends StatefulWidget {
   final String userId;
   final String userName;
@@ -521,8 +557,14 @@ class _FamilyProfileSetupScreenState extends State<FamilyProfileSetupScreen> {
                                           if (value == null ||
                                               value.trim().isEmpty)
                                             return 'Please enter age';
-                                          if (int.tryParse(value.trim()) ==
-                                              null) return 'Enter valid age';
+                                          final age =
+                                              int.tryParse(value.trim());
+                                          if (age == null) {
+                                            return 'Enter valid age';
+                                          }
+                                          if (age < 1 || age > 120) {
+                                            return 'Age must be between 1 and 120';
+                                          }
                                           return null;
                                         },
                                       ),
@@ -571,7 +613,23 @@ class _FamilyProfileSetupScreenState extends State<FamilyProfileSetupScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       _label('Weight'),
-                                      _inputField(_weightCtrl, 'Optional'),
+                                      _inputField(
+                                        _weightCtrl,
+                                        'Optional',
+                                        keyboardType: TextInputType.number,
+                                        validator: (value) {
+                                          final text = value?.trim() ?? '';
+                                          if (text.isEmpty) return null;
+                                          final weight = num.tryParse(text);
+                                          if (weight == null) {
+                                            return 'Enter valid weight';
+                                          }
+                                          if (weight <= 0 || weight > 400) {
+                                            return 'Enter realistic weight';
+                                          }
+                                          return null;
+                                        },
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -772,9 +830,9 @@ class _FamilyProfileSetupScreenState extends State<FamilyProfileSetupScreen> {
   }
 }
 
-// ─────────────────────────────────────────────
-// FAMILY MEMBERS LIST SCREEN
-// ─────────────────────────────────────────────
+
+
+
 class FamilyMembersScreen extends StatefulWidget {
   final String userId;
 
@@ -792,6 +850,7 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
   bool _isLoading = true;
   String? _error;
   String _loggedInUserName = 'User';
+  String _loggedInUserEmail = '';
 
   @override
   void initState() {
@@ -805,6 +864,7 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
     if (!mounted) return;
     setState(() {
       _loggedInUserName = prefs.getString('user_name') ?? 'User';
+      _loggedInUserEmail = prefs.getString('user_email') ?? '';
     });
   }
 
@@ -1147,6 +1207,8 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
                   member: member,
                   onDelete: () => _showDeleteConfirmation(member),
                   userId: widget.userId,
+                  userName: _loggedInUserName,
+                  userEmail: _loggedInUserEmail,
                 );
               },
             ),
@@ -1157,9 +1219,9 @@ class _FamilyMembersScreenState extends State<FamilyMembersScreen> {
   }
 }
 
-// ─────────────────────────────────────────────
-// VIEW FAMILY MEMBER PREFERENCES SCREEN
-// ─────────────────────────────────────────────
+
+
+
 class FamilyMemberPreferencesViewScreen extends StatefulWidget {
   final String userId;
   final String memberId;
@@ -1787,9 +1849,9 @@ class _FamilyMemberPreferencesViewScreenState
   }
 }
 
-// ─────────────────────────────────────────────
-// SHARED UI WIDGETS
-// ─────────────────────────────────────────────
+
+
+
 class _FamilyAppBar extends StatelessWidget {
   final String title;
   final VoidCallback onBackPressed;
@@ -2037,19 +2099,48 @@ class _MemberCard extends StatelessWidget {
   final FamilyMember member;
   final VoidCallback onDelete;
   final String userId;
+  final String userName;
+  final String userEmail;
 
   const _MemberCard({
     required this.member,
     required this.onDelete,
     required this.userId,
+    required this.userName,
+    required this.userEmail,
   });
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature feature coming soon!'),
-        duration: const Duration(seconds: 1),
-        backgroundColor: kPrimary,
+  Future<void> _openScan(BuildContext context) async {
+    try {
+      final cameras = await availableCameras();
+      if (!context.mounted) return;
+      if (cameras.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No cameras available')),
+        );
+        return;
+      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ScanScreen(camera: cameras.first)),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open camera')),
+      );
+    }
+  }
+
+  void _openHistory(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ScanHistoryScreen(
+          userId: userId,
+          userName: userName,
+          userEmail: userEmail,
+        ),
       ),
     );
   }
@@ -2261,7 +2352,7 @@ class _MemberCard extends StatelessWidget {
                 onSelected: (value) {
                   switch (value) {
                     case 'scan':
-                      _showComingSoon(context, 'Scan for ${member.name}');
+                      _openScan(context);
                       break;
                     case 'preferences':
                       Navigator.push(
@@ -2290,8 +2381,7 @@ class _MemberCard extends StatelessWidget {
                       );
                       break;
                     case 'history':
-                      _showComingSoon(
-                          context, '${member.name}\'s scan history');
+                      _openHistory(context);
                       break;
                     case 'permissions':
                       _showPermissionsDialog(context);

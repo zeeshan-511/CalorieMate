@@ -7,6 +7,11 @@ const http = require("http");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+let nodemailer = null;
+try {
+  nodemailer = require("nodemailer");
+} catch (_) {}
 
 const app = express();
 const server = http.createServer(app);
@@ -28,11 +33,11 @@ if (process.env.CALORIEMATE_SKIP_MONGO !== "1") {
     .catch((err) => console.error("MongoDB connection error:", err));
 }
 
-// =====================================================
-// USER SCHEMA
-// Primary users are stored ONLY in users collection.
-// Family members are NOT stored inside preferences.
-// =====================================================
+
+
+
+
+
 const userSchema = new mongoose.Schema({
   fullName: { type: String },
   email: { type: String, required: true, unique: true },
@@ -40,17 +45,27 @@ const userSchema = new mongoose.Schema({
   mobileNumber: { type: String },
   dateOfBirth: { type: String },
   googleId: { type: String },
+  settings: {
+    emailNotifications: { type: Boolean, default: true },
+    familySharing: { type: Boolean, default: true },
+    saveScanHistory: { type: Boolean, default: true },
+    recommendationAlerts: { type: Boolean, default: true },
+  },
+  passwordResetTokenHash: { type: String, default: "", index: true },
+  passwordResetExpiresAt: { type: Date, default: null },
+  passwordResetUsedAt: { type: Date, default: null },
+  lastLoginAt: { type: Date, default: null },
   familyMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: "FamilyMember" }],
   createdAt: { type: Date, default: Date.now },
 });
 
 const User = mongoose.model("User", userSchema);
 
-// =====================================================
-// FAMILY MEMBER SCHEMA
-// Separate collection: familymembers
-// Each family member belongs to one primary user.
-// =====================================================
+
+
+
+
+
 const familyMemberSchema = new mongoose.Schema(
   {
     userId: {
@@ -106,12 +121,12 @@ const familyMemberSchema = new mongoose.Schema(
 
 const FamilyMember = mongoose.model("FamilyMember", familyMemberSchema);
 
-// =====================================================
-// PREFERENCE SCHEMAS
-// Separate collections:
-// 1) primarypreferences  => logged-in user's own preferences
-// 2) familypreferences   => each family member's preferences linked to primary user
-// =====================================================
+
+
+
+
+
+
 const preferenceFields = {
   allergens: [{ type: String }],
   customAllergens: [{ type: String }],
@@ -216,11 +231,11 @@ familyPreferenceSchema.index(
 const PrimaryPreference = mongoose.model("PrimaryPreference", primaryPreferenceSchema);
 const FamilyPreference = mongoose.model("FamilyPreference", familyPreferenceSchema);
 
-// =====================================================
-// SCAN HISTORY SCHEMA
-// Scan results are saved separately and linked to the logged-in user.
-// Collection: scanhistories
-// =====================================================
+
+
+
+
+
 const scanHistorySchema = new mongoose.Schema(
   {
     userId: {
@@ -299,11 +314,7 @@ ocrResultSchema.index({ userId: 1, createdAt: -1 });
 
 const OcrResult = mongoose.model("OcrResult", ocrResultSchema);
 
-// =====================================================
-// FULL PRODUCT ANALYSIS SCHEMA
-// Complete post-OCR analysis records are saved here and linked to scan history.
-// Collection: productanalyses
-// =====================================================
+
 const productAnalysisSchema = new mongoose.Schema(
   {
     userId: {
@@ -357,11 +368,9 @@ productAnalysisSchema.index({ scanHistoryId: 1, createdAt: -1 });
 const ProductAnalysis = mongoose.model("ProductAnalysis", productAnalysisSchema);
 
 
-// =====================================================
-// PRODUCT RECOMMENDATION SCHEMA
-// AI-based recommendation results are saved in MongoDB.
-// Collection: productrecommendations
-// =====================================================
+
+
+
 const productRecommendationSchema = new mongoose.Schema(
   {
     userId: {
@@ -388,11 +397,7 @@ productRecommendationSchema.index({ userId: 1, createdAt: -1 });
 
 const ProductRecommendation = mongoose.model("ProductRecommendation", productRecommendationSchema);
 
-// =====================================================
-// NOTIFICATION SCHEMA
-// Used for family-member invitation requests and future app notifications.
-// Collection: familynotifications
-// =====================================================
+
 const familyNotificationSchema = new mongoose.Schema(
   {
     type: {
@@ -461,10 +466,7 @@ familyNotificationSchema.index({ recipientEmail: 1, createdAt: -1 });
 
 const FamilyNotification = mongoose.model("FamilyNotification", familyNotificationSchema);
 
-// =====================================================
-// PREFERENCE HISTORY, SHARING, REPORTS, FEEDBACK + ACTIVITY SCHEMAS
-// These collections keep user changes and health actions auditable.
-// =====================================================
+
 const preferenceHistorySchema = new mongoose.Schema(
   {
     userId: {
@@ -675,8 +677,6 @@ const logActivity = async ({ userId = null, action, entityType = "", entityId = 
 };
 
 
-// Backward compatibility: old code may have created a "preferences" collection.
-// These indexes are cleaned so old unique userId indexes do not keep causing errors.
 async function fixPreferenceIndexes() {
   try {
     await PrimaryPreference.collection.createIndex(
@@ -710,11 +710,11 @@ async function fixPreferenceIndexes() {
     console.error("Preference index fix error:", error.message);
   }
 }
-// =====================================================
-// AUTH MIDDLEWARE
-// Dummy auth for development.
-// Replace with real JWT verification later.
-// =====================================================
+
+
+
+
+
 const auth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -729,9 +729,9 @@ const auth = async (req, res, next) => {
   }
 };
 
-// =====================================================
-// HELPERS
-// =====================================================
+
+
+
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 const toStringArray = (value) => {
@@ -745,6 +745,104 @@ const numberOrDefault = (value, defaultValue = 1) => {
 };
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+
+const isValidPassword = (value) =>
+  typeof value === "string" &&
+  value.length >= 6 &&
+  /[A-Za-z]/.test(value) &&
+  /[0-9]/.test(value);
+
+const sanitizeUser = (user) => {
+  const source = typeof user.toObject === "function" ? user.toObject() : { ...user };
+  delete source.password;
+  delete source.passwordResetTokenHash;
+  delete source.passwordResetExpiresAt;
+  delete source.passwordResetUsedAt;
+  return source;
+};
+
+const buildToken = (prefix, userId) => `${prefix}-${userId}-${Date.now()}`;
+
+const buildUserSession = async (user, message = "Login successful") => {
+  await User.findByIdAndUpdate(user._id, { $set: { lastLoginAt: new Date() } });
+  const familyMembers = await FamilyMember.find({ userId: user._id });
+  const freshUser = await User.findById(user._id).lean();
+  return {
+    message,
+    user: sanitizeUser(freshUser || user),
+    hasFamilyMembers: familyMembers.length > 0,
+    token: buildToken("dummy-token", user._id),
+  };
+};
+
+const validSettingsPayload = (settings = {}) => ({
+  emailNotifications: settings.emailNotifications !== false,
+  familySharing: settings.familySharing !== false,
+  saveScanHistory: settings.saveScanHistory !== false,
+  recommendationAlerts: settings.recommendationAlerts !== false,
+});
+
+const hashResetToken = (token) =>
+  crypto.createHash("sha256").update(String(token || "")).digest("hex");
+
+const sendPasswordResetEmail = async ({ email, token, user }) => {
+  const resetUrl = process.env.PASSWORD_RESET_WEB_URL
+    ? `${process.env.PASSWORD_RESET_WEB_URL}?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
+    : "";
+  const subject = "CalorieMate password reset code";
+  const text = [
+    `Hello ${user.fullName || "CalorieMate user"},`,
+    "",
+    `Your CalorieMate password reset code is: ${token}`,
+    resetUrl ? `Reset link: ${resetUrl}` : "",
+    "",
+    "This code expires in 15 minutes. Ignore this email if you did not request a password reset.",
+  ].filter(Boolean).join("\n");
+
+  if (process.env.EMAIL_PROVIDER_WEBHOOK_URL) {
+    await axios.post(
+      process.env.EMAIL_PROVIDER_WEBHOOK_URL,
+      {
+        to: email,
+        subject,
+        text,
+        payload: { userId: user._id, resetUrl },
+      },
+      { timeout: 8000 }
+    );
+    return { attempted: true, status: "sent", provider: "webhook" };
+  }
+
+  if (process.env.SMTP_HOST && nodemailer) {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: process.env.SMTP_SECURE === "true",
+      auth: process.env.SMTP_USER
+        ? {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS || "",
+          }
+        : undefined,
+    });
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || "CalorieMate <no-reply@caloriemate.local>",
+      to: email,
+      subject,
+      text,
+    });
+    return { attempted: true, status: "sent", provider: "smtp" };
+  }
+
+  console.log(`Password reset token for ${email}: ${token}`);
+  return {
+    attempted: false,
+    status: "not_configured",
+    message: "Configure SMTP_HOST or EMAIL_PROVIDER_WEBHOOK_URL to send password reset emails.",
+  };
+};
 
 const createInvitationToken = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
@@ -882,10 +980,7 @@ const createAppNotification = async ({
   }
 };
 
-// =====================================================
-// DATASET-BACKED FOOD INTELLIGENCE
-// Uses the cleaned product dataset and ingredient knowledge base.
-// =====================================================
+
 const loadJsonData = (fileName, fallback = []) => {
   try {
     return JSON.parse(
@@ -1646,16 +1741,8 @@ const buildIngredientDetails = (ingredients) =>
         halalReason: halal.reason,
         halalSourceSensitive: halal.sourceSensitive,
         halalTriggers: halal.matchedTriggers,
-        compliance: {
-          who: "No specific WHO warning found.",
-          codex: "Check product-category limits where applicable.",
-          pfa: "Must follow local food-label and product rules.",
-          psqca: "Must follow the applicable product standard.",
-        },
-        authorityNotes: [
-          "WHO: no specific warning was found for this ingredient.",
-          "Codex, PFA, and PSQCA: the finished product must follow applicable category and label rules.",
-        ],
+        compliance: {},
+        authorityNotes: [],
         eCodes: halal.eCodes.map((code) => code.toUpperCase()),
       };
     }
@@ -1674,12 +1761,8 @@ const buildIngredientDetails = (ingredients) =>
       halalReason: halal.reason,
       halalSourceSensitive: halal.sourceSensitive,
       halalTriggers: halal.matchedTriggers,
-      compliance: record.compliance || {},
-      authorityNotes: [
-        "WHO/JECFA: reviewed guidance is used where available.",
-        "Codex: use must stay within the permitted product category and amount.",
-        "PFA and PSQCA: local product, labeling, and halal requirements still apply.",
-      ],
+      compliance: {},
+      authorityNotes: [],
       eCodes: halal.eCodes.length > 0 ? halal.eCodes.map((code) => code.toUpperCase()) : record.e_codes || [],
       sources: record.sources || [],
     };
@@ -1822,12 +1905,12 @@ const resolveProductHalalSummary = (product, details) => {
   };
 };
 
-// =====================================================
-// OCR INGREDIENT EXTRACTION + VALIDATION HELPERS
-// Strong OCR cleaning for noisy food labels.
-// It extracts ingredients from ingredients, ocrText, scannedText,
-// productIngredients, scanResult.text, scanResult.ocrText, etc.
-// =====================================================
+
+
+
+
+
+
 const OCR_ALLOWED_TEXT_FIELDS = [
   "ingredients",
   "productIngredients",
@@ -2003,7 +2086,7 @@ const isolateIngredientSection = (text) => {
 const fixCommonOcrWord = (word) => {
   let fixed = String(word || "").trim();
 
-  // Correct common OCR digit mistakes only when mixed with letters.
+
   if (/[a-zA-Z]/.test(fixed) && /\d/.test(fixed)) {
     fixed = fixed
       .replace(/0/g, "o")
@@ -2150,8 +2233,8 @@ const cleanOcrIngredients = (rawInput) => {
   };
 };
 
-// Reject random book/story text, receipts, or non-food text.
-// This prevents fake ingredient analysis when the camera scans the wrong area.
+
+
 const looksLikeFoodIngredientLabel = (rawText, ingredients = []) => {
   const text = String(rawText || "").toLowerCase();
 
@@ -2245,26 +2328,26 @@ const looksLikeFoodIngredientLabel = (rawText, ingredients = []) => {
   const foodMatches = commonFoodWords.filter((w) => text.includes(w)).length;
   const storyMatches = obviousStoryWords.filter((w) => text.includes(w)).length;
 
-  // If OCR has clear ingredient heading, accept.
+
   if (text.includes("ingredients:") || text.includes("ingredient:")) return true;
 
-  // Accept if it has enough food words and multiple extracted ingredients.
+
   if (foodMatches >= 3 && ingredients.length >= 3) return true;
 
-  // Accept common label wording.
+
   if (strongMatches >= 2 && ingredients.length >= 2) return true;
 
-  // Reject obvious story/book text.
+
   if (storyMatches >= 3 && foodMatches < 3) return false;
 
   return false;
 };
 
 
-// =====================================================
-// SCAN HISTORY ROUTES
-// Saves and fetches scan results separately for each logged-in user.
-// =====================================================
+
+
+
+
 const buildScanHistoryData = (body, user) => {
   const extracted = cleanOcrIngredients(body);
 
@@ -2458,9 +2541,9 @@ app.delete("/scan-history/item/:scanId", deleteScanHistoryHandler);
 app.delete("/api/scan-history/item/:scanId", deleteScanHistoryHandler);
 
 
-// =====================================================
-// TEST ROUTES
-// =====================================================
+
+
+
 app.get("/", (req, res) => {
   res.send("Server is running!");
 });
@@ -2542,55 +2625,35 @@ app.get("/api/fix-preferences-index", async (req, res) => {
   }
 });
 
-// =====================================================
-// AUTH ROUTES
-// =====================================================
+
+
+
 app.post("/register", async (req, res) => {
   try {
-    const user = await User.create(req.body);
+    const fullName = String(req.body.fullName || "").trim();
+    const email = normalizeEmail(req.body.email);
+    const password = String(req.body.password || "");
+    const mobileNumber = String(req.body.mobileNumber || "").trim();
+    const dateOfBirth = String(req.body.dateOfBirth || "").trim();
 
-    res.status(201).json({
-      message: "User registered successfully",
-      user,
-      token: "dummy-token-" + user._id,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  try {
-    const user = await User.findOne({ email });
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.password !== password) {
-      return res.status(401).json({ message: "Invalid password" });
+    if (!fullName || fullName.length < 2) {
+      return res.status(400).json({ message: "Full name is required", error: "Full name is required" });
     }
 
-    const familyMembers = await FamilyMember.find({ userId: user._id });
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: "Valid email is required", error: "Valid email is required" });
+    }
 
-    res.status(200).json({
-      message: "Login successful",
-      user,
-      hasFamilyMembers: familyMembers.length > 0,
-      token: "dummy-token-" + user._id,
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters and include letters and numbers",
+        error: "Password must be at least 6 characters and include letters and numbers",
+      });
+    }
 
-app.post("/api/signup", async (req, res) => {
-  const { fullName, email, password, mobileNumber, dateOfBirth } = req.body;
-
-  try {
     const existingUser = await User.findOne({ email });
-
     if (existingUser) {
-      return res.status(400).json({ error: "Email already registered" });
+      return res.status(400).json({ message: "Email already registered", error: "Email already registered" });
     }
 
     const user = await User.create({
@@ -2601,20 +2664,89 @@ app.post("/api/signup", async (req, res) => {
       dateOfBirth,
     });
 
-    res.status(201).json({
-      message: "User created",
-      user,
-      token: "dummy-token-" + user._id,
-    });
+    res.status(201).json(await buildUserSession(user, "User registered successfully"));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ message: "Registration failed", error: err.message });
+  }
+});
+
+app.post("/login", async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || "");
+
+  try {
+    if (!isValidEmail(email) || !password) {
+      return res.status(400).json({ message: "Valid email and password are required" });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user.password && user.googleId) {
+      return res.status(401).json({ message: "This account uses Google Sign-In. Please continue with Google." });
+    }
+    if (user.password !== password) {
+      return res.status(401).json({ message: "Invalid password" });
+    }
+
+    res.status(200).json(await buildUserSession(user, "Login successful"));
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+app.post("/api/signup", async (req, res) => {
+  try {
+    const fullName = String(req.body.fullName || "").trim();
+    const email = normalizeEmail(req.body.email);
+    const password = String(req.body.password || "");
+    const mobileNumber = String(req.body.mobileNumber || "").trim();
+    const dateOfBirth = String(req.body.dateOfBirth || "").trim();
+
+    if (!fullName || fullName.length < 2) {
+      return res.status(400).json({ message: "Full name is required", error: "Full name is required" });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: "Valid email is required", error: "Valid email is required" });
+    }
+
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters and include letters and numbers",
+        error: "Password must be at least 6 characters and include letters and numbers",
+      });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already registered", error: "Email already registered" });
+    }
+
+    const user = await User.create({
+      fullName,
+      email,
+      password,
+      mobileNumber,
+      dateOfBirth,
+    });
+
+    res.status(201).json(await buildUserSession(user, "User created"));
+  } catch (err) {
+    res.status(500).json({ message: "Signup failed", error: err.message });
   }
 });
 
 app.post("/api/google-login", async (req, res) => {
-  const { name, email, googleId } = req.body;
+  const name = String(req.body.name || req.body.fullName || "Google User").trim();
+  const email = normalizeEmail(req.body.email);
+  const googleId = String(req.body.googleId || "").trim();
 
   try {
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: "Valid Google email is required" });
+    }
+
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -2623,24 +2755,120 @@ app.post("/api/google-login", async (req, res) => {
         email,
         googleId,
       });
+    } else {
+      const updates = {};
+      if (!user.googleId && googleId) updates.googleId = googleId;
+      if ((!user.fullName || user.fullName === "Google User") && name) updates.fullName = name;
+      if (Object.keys(updates).length) {
+        user = await User.findByIdAndUpdate(user._id, { $set: updates }, { new: true });
+      }
     }
 
-    const familyMembers = await FamilyMember.find({ userId: user._id });
-
-    res.status(200).json({
-      message: "User logged in",
-      user,
-      hasFamilyMembers: familyMembers.length > 0,
-      token: "dummy-token-" + user._id,
-    });
+    res.status(200).json(await buildUserSession(user, "Google login successful"));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ message: "Google login failed", error: err.message });
   }
 });
 
-// =====================================================
-// FAMILY MEMBER ROUTES
-// =====================================================
+app.post("/api/forgot-password", async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+
+  try {
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: "Valid email is required" });
+    }
+
+    const genericMessage = "If an account exists for this email, a password reset code has been sent.";
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(200).json({ message: genericMessage });
+    }
+
+    if (!user.password && user.googleId) {
+      return res.status(400).json({ message: "This account uses Google Sign-In and does not have a password to reset." });
+    }
+
+    const resetToken = crypto.randomBytes(24).toString("hex");
+    user.passwordResetTokenHash = hashResetToken(resetToken);
+    user.passwordResetExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    user.passwordResetUsedAt = null;
+    await user.save();
+
+    let delivery = { attempted: false, status: "not_configured" };
+    try {
+      delivery = await sendPasswordResetEmail({ email, token: resetToken, user });
+    } catch (error) {
+      delivery = { attempted: true, status: "failed", message: error.message };
+    }
+
+    await logActivity({
+      userId: user._id,
+      action: "password_reset_requested",
+      entityType: "User",
+      entityId: user._id,
+      metadata: { email, deliveryStatus: delivery.status },
+    });
+
+    res.status(200).json({
+      message: genericMessage,
+      delivery,
+      ...(process.env.NODE_ENV === "production" ? {} : { devResetToken: resetToken }),
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Unable to process password reset request", error: err.message });
+  }
+});
+
+app.post("/api/reset-password", async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const token = String(req.body.token || "").trim();
+  const password = String(req.body.password || "");
+
+  try {
+    if (!isValidEmail(email) || !token) {
+      return res.status(400).json({ message: "Email and reset code are required" });
+    }
+
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters and include letters and numbers",
+      });
+    }
+
+    const user = await User.findOne({
+      email,
+      passwordResetTokenHash: hashResetToken(token),
+      passwordResetExpiresAt: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired reset code" });
+    }
+
+    user.password = password;
+    user.passwordResetUsedAt = new Date();
+    user.passwordResetTokenHash = "";
+    user.passwordResetExpiresAt = null;
+    await user.save();
+
+    await logActivity({
+      userId: user._id,
+      action: "password_reset_completed",
+      entityType: "User",
+      entityId: user._id,
+      metadata: { email },
+    });
+
+    res.status(200).json({ message: "Password reset successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Unable to reset password", error: err.message });
+  }
+});
+
+
+
+
 app.post("/family-members", auth, async (req, res) => {
   try {
     const {
@@ -2924,8 +3152,8 @@ app.delete("/family-members/:memberId", auth, async (req, res) => {
       $pull: { familyMembers: member._id },
     });
 
-    // Delete only this family member preferences.
-    // Primary user or other family members will not be affected.
+
+
     await FamilyPreference.deleteMany({ userId: member.userId, memberId: member._id });
     await FamilyNotification.deleteMany({ memberId: member._id });
 
@@ -2959,9 +3187,7 @@ app.get("/family-members/count/:userId", auth, async (req, res) => {
   }
 });
 
-// =====================================================
-// FAMILY NOTIFICATION + INVITATION ROUTES
-// =====================================================
+
 const hasPreferencePayload = (payload) => {
   const fields = [
     "allergens", "customAllergens", "additives", "customAdditives",
@@ -3278,9 +3504,7 @@ app.put("/api/family-members/:memberId/self-preferences", auth, async (req, res)
   }
 });
 
-// =====================================================
-// USER ROUTES
-// =====================================================
+
 app.get("/user/:userId/profile", auth, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -3308,11 +3532,98 @@ app.get("/user/:userId/profile", auth, async (req, res) => {
   }
 });
 
-// =====================================================
-// PREFERENCES ROUTES
-// My Preferences => primarypreferences collection
-// Family Member Preferences => familypreferences collection
-// =====================================================
+app.get("/api/users/:userId/settings", auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const user = await User.findById(userId).select("-password -passwordResetTokenHash -passwordResetExpiresAt -passwordResetUsedAt");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.status(200).json({
+      message: "Settings loaded successfully",
+      user: sanitizeUser(user),
+      settings: validSettingsPayload(user.settings || {}),
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Server error while fetching settings",
+      error: error.message,
+    });
+  }
+});
+
+app.put("/api/users/:userId/settings", auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const fullName = String(req.body.fullName || "").trim();
+    const mobileNumber = String(req.body.mobileNumber || "").trim();
+    const dateOfBirth = String(req.body.dateOfBirth || "").trim();
+
+    if (!fullName || fullName.length < 2) {
+      return res.status(400).json({ message: "Full name must be at least 2 characters" });
+    }
+
+    if (mobileNumber && !/^\+?[0-9]{10,15}$/.test(mobileNumber.replace(/[\s-]/g, ""))) {
+      return res.status(400).json({ message: "Enter a valid mobile number" });
+    }
+
+    const settings = validSettingsPayload(req.body.settings || {});
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          fullName,
+          mobileNumber,
+          dateOfBirth,
+          settings,
+        },
+      },
+      { new: true, runValidators: true }
+    ).select("-password -passwordResetTokenHash -passwordResetExpiresAt -passwordResetUsedAt");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await PrimaryPreference.updateOne(
+      { userId },
+      { $set: { userName: fullName } }
+    );
+
+    await logActivity({
+      userId,
+      action: "settings_updated",
+      entityType: "User",
+      entityId: userId,
+      metadata: { settings },
+    });
+
+    res.status(200).json({
+      message: "Settings saved successfully",
+      user: sanitizeUser(user),
+      settings,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Server error while saving settings",
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+
 const buildPreferenceData = (body) => ({
   allergens: toStringArray(body.allergens),
   customAllergens: toStringArray(body.customAllergens),
@@ -3434,7 +3745,7 @@ app.post("/api/preferences/save", auth, async (req, res) => {
     const finalUserName = userName || primaryUserName;
     const preferenceData = buildPreferenceData(req.body);
 
-    // No memberId means this is the logged-in primary user's own preferences.
+
     if (!memberId) {
       const preferences = await PrimaryPreference.findOneAndUpdate(
         { userId },
@@ -3502,8 +3813,8 @@ app.post("/api/preferences/save", auth, async (req, res) => {
       {
         $set: {
           userId,
-          // Family preference must always store the PRIMARY user name here.
-          // Do not trust req.body.userName because Flutter may pass the member name.
+
+
           userName: primaryUserName,
           memberId,
           memberName: finalMemberName,
@@ -3677,7 +3988,7 @@ app.put("/api/preferences/:userId", auth, async (req, res) => {
       {
         $set: {
           userId,
-          // Family preference must always store the PRIMARY user name here.
+
           userName: primaryUserName,
           memberId,
           memberName: req.body.memberName || member.name,
@@ -3803,8 +4114,8 @@ app.delete("/api/preferences/:userId", auth, async (req, res) => {
     res.status(500).json({ message: "Server error while deleting preferences", error: error.message });
   }
 });
-// =====================================================
-// Fix old family preference documents where userName was saved as memberName.
+
+
 app.post("/api/preferences/fix-family-usernames/:userId", auth, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -3891,11 +4202,11 @@ app.get("/api/ingredient-google-info", async (req, res) => {
 });
 
 
-// =====================================================
-// AI PRODUCT RECOMMENDATION ROUTES
-// Recommends the scanned product for the primary user and every family member
-// using saved MongoDB preferences.
-// =====================================================
+
+
+
+
+
 const normalizeText = (value) => String(value || "").toLowerCase().trim();
 
 const extractProductIngredients = (body) => {
@@ -5000,9 +5311,7 @@ const recommendDatasetAlternatives = ({
     .map(({ rankingScore, ...item }) => item);
 };
 
-// Complete automatic post-scan flow:
-// identify product, enrich ingredients, check allergens/halal/calories,
-// apply saved preferences, and suggest better alternatives.
+
 app.post("/api/analyze-scanned-product", auth, async (req, res) => {
   try {
     const { userId } = req.body;
@@ -5646,8 +5955,7 @@ app.get("/api/health-reports/:userId", auth, async (req, res) => {
   }
 });
 
-// ERROR HANDLERS
-// =====================================================
+
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err.stack);
   res.status(500).json({
@@ -5663,9 +5971,9 @@ app.use((req, res) => {
   });
 });
 
-// =====================================================
-// START SERVER
-// =====================================================
+
+
+
 const PORT = process.env.PORT || 9000;
 
 if (require.main === module) {

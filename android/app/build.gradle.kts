@@ -1,13 +1,13 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin") // Flutter plugin
+    id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.caloriematefyp"
 
-    // Use fixed SDK versions compatible with latest AndroidX
+
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 

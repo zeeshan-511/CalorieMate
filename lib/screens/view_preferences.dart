@@ -6,10 +6,14 @@ import 'package:camera/camera.dart';
 import 'homepage.dart';
 import 'my_preferences.dart' as preference_editor;
 import 'scan_screen.dart';
+import '../config/app_config.dart';
+import 'health_dashboard_screen.dart';
+import 'reports_screen.dart';
+import 'Setting.dart';
 
-// ─────────────────────────────────────────────
-//  THEME CONSTANTS
-// ─────────────────────────────────────────────
+
+
+
 const Color kPrimary = Color(0xFF2D7D6F);
 const Color kPrimaryLight = Color(0xFF3A9E8D);
 const Color kBgCream = Color(0xFFF5F0E8);
@@ -20,11 +24,11 @@ const Color kTextDark = Color(0xFF1A1A1A);
 const Color kTextMid = Color(0xFF4A4A4A);
 const Color kTextLight = Color(0xFF8A8A8A);
 
-const String kApiBaseUrl = 'http://192.168.0.114:9000';
+String get kApiBaseUrl => AppConfig.apiBaseUrl;
 
-// ─────────────────────────────────────────────
-//  USER PREFERENCES MODEL
-// ─────────────────────────────────────────────
+
+
+
 class UserPreferences {
   final List<String> allergens;
   final List<String> customAllergens;
@@ -255,9 +259,9 @@ class UserPreferences {
   }
 }
 
-// ─────────────────────────────────────────────
-//  API SERVICE
-// ─────────────────────────────────────────────
+
+
+
 class PreferenceApiService {
   static String _tokenForUser(String userId) => 'dummy-token-$userId';
 
@@ -324,9 +328,9 @@ class PreferenceApiService {
   }
 }
 
-// ─────────────────────────────────────────────
-//  VIEW PREFERENCES SCREEN
-// ─────────────────────────────────────────────
+
+
+
 class ViewPreferencesScreen extends StatefulWidget {
   final String userName;
   final String userEmail;
@@ -718,17 +722,50 @@ class _ViewPreferencesScreenState extends State<ViewPreferencesScreen> {
                   if (i == 0) {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => const HomePage()),
+                      MaterialPageRoute(
+                        builder: (_) => HomePage(
+                          userData: {
+                            'id': widget.userId,
+                            'fullName': widget.userName,
+                            'email': widget.userEmail,
+                          },
+                        ),
+                      ),
                       (route) => false,
                     );
                   } else if (isScan) {
                     _navigateToScan();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            '${navItems[i]['label']} feature coming soon!'),
-                        duration: const Duration(seconds: 1),
+                  } else if (i == 2) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReportsScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
+                        ),
+                      ),
+                    );
+                  } else if (i == 3) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HealthDashboardScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
+                        ),
+                      ),
+                    );
+                  } else if (i == 4) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SettingsScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
+                        ),
                       ),
                     );
                   }
@@ -792,9 +829,9 @@ class _ViewPreferencesScreenState extends State<ViewPreferencesScreen> {
   }
 }
 
-// ─────────────────────────────────────────────
-//  WIDGETS
-// ─────────────────────────────────────────────
+
+
+
 class _ViewPrefsAppBar extends StatelessWidget {
   final VoidCallback onBackPressed;
   final Future<void> Function() onRefreshPressed;

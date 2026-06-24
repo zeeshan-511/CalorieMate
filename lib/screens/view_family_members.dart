@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:camera/camera.dart';
 
 import 'Homepage.dart';
+import '../config/app_config.dart';
+import 'health_dashboard_screen.dart';
+import 'reports_screen.dart';
+import 'scan_screen.dart';
+import 'Setting.dart';
 
 const Color kPrimary = Color(0xFF2D7D6F);
 const Color kPrimaryLight = Color(0xFF3A9E8D);
@@ -14,7 +20,7 @@ const Color kTextDark = Color(0xFF1A1A1A);
 const Color kTextMid = Color(0xFF4A4A4A);
 const Color kDanger = Color(0xFFE74C3C);
 
-const String apiBaseUrl = 'http://192.168.0.114:9000';
+String get apiBaseUrl => AppConfig.apiBaseUrl;
 
 class FamilyMember {
   final String id;
@@ -84,12 +90,43 @@ class _ViewFamilyMembersScreenState extends State<ViewFamilyMembersScreen> {
   String? _error;
   String _userName = 'User';
   int _selectedNav = 0;
+  List<CameraDescription>? _cameras;
 
   @override
   void initState() {
     super.initState();
     _getUserName();
     _loadFamilyMembers();
+    _initializeCameras();
+  }
+
+  Future<void> _initializeCameras() async {
+    try {
+      _cameras = await availableCameras();
+    } catch (_) {}
+  }
+
+  Future<void> _navigateToScan() async {
+    if (_cameras == null || _cameras!.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No cameras available')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ScanScreen(camera: _cameras!.first)),
+    );
+  }
+
+  Future<Map<String, String>> _sessionMap() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      'userId': prefs.getString('user_id') ?? widget.userId,
+      'userName': prefs.getString('user_name') ?? _userName,
+      'userEmail': prefs.getString('user_email') ?? '',
+    };
   }
 
   Future<void> _getUserName() async {
@@ -351,18 +388,54 @@ class _ViewFamilyMembersScreenState extends State<ViewFamilyMembersScreen> {
               final isScan = i == 1;
 
               return GestureDetector(
-                onTap: () {
+                onTap: () async {
                   setState(() => _selectedNav = i);
 
                   if (i == 0) {
                     _goHome();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${navItems[i]['label']} feature coming soon!'),
-                        duration: const Duration(seconds: 1),
+                  } else if (isScan) {
+                    _navigateToScan();
+                  } else if (i == 2) {
+                    final session = await _sessionMap();
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReportsScreen(
+                          userId: session['userId']!,
+                          userName: session['userName']!,
+                          userEmail: session['userEmail']!,
+                        ),
                       ),
                     );
+                  } else if (i == 3) {
+                    final session = await _sessionMap();
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HealthDashboardScreen(
+                          userId: session['userId']!,
+                          userName: session['userName']!,
+                          userEmail: session['userEmail']!,
+                        ),
+                      ),
+                    );
+                  } else if (i == 4) {
+                    final session = await _sessionMap();
+                    if (!mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SettingsScreen(
+                          userId: session['userId']!,
+                          userName: session['userName']!,
+                          userEmail: session['userEmail']!,
+                        ),
+                      ),
+                    );
+                  } else {
+                    return;
                   }
                 },
                 child: Column(

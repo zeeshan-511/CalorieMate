@@ -1,13 +1,18 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'screens/splash_screen.dart';
-import 'screens/onboarding_screens.dart'; // Import onboarding screens
-// Remove scan_screen import from here
+import 'screens/onboarding_screens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (error) {
+    debugPrint('Environment load skipped: $error');
+  }
 
   CameraDescription? firstCamera;
   try {
@@ -44,7 +49,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Wrapper to navigate from SplashScreen to OnboardingScreen
 class SplashScreenWrapper extends StatefulWidget {
   final CameraDescription? camera;
   const SplashScreenWrapper({Key? key, required this.camera}) : super(key: key);
@@ -61,7 +65,6 @@ class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
   }
 
   Future<void> _navigateToOnboarding() async {
-    // Wait 2.5 seconds on splash screen
     await Future.delayed(const Duration(milliseconds: 2500));
 
     if (mounted) {

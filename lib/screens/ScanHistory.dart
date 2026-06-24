@@ -7,7 +7,9 @@ import 'package:camera/camera.dart';
 import 'scan_screen.dart';
 import 'reports_screen.dart';
 import 'health_dashboard_screen.dart';
-import 'Homepage.dart'; // ✅ Change this if your homepage file name is different
+import 'Homepage.dart';
+import '../config/app_config.dart';
+import 'Setting.dart';
 
 class ScanHistoryScreen extends StatefulWidget {
   final String userId;
@@ -32,7 +34,7 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
   List<Map<String, dynamic>> _history = [];
   List<CameraDescription>? _cameras;
 
-  static const String apiBaseUrl = 'http://192.168.0.114:9000';
+  static String get apiBaseUrl => AppConfig.apiBaseUrl;
   static const Color _teal = Color(0xFF2E8B72);
   static const Color _bg = Color(0xFFF5F9F7);
 
@@ -795,14 +797,16 @@ class _ScanHistoryScreenState extends State<ScanHistoryScreen> {
                         ),
                       ),
                     );
-                  } else if (i != 2) {
+                  } else if (i == 4) {
                     setState(() => _selectedNav = i);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${navItems[i]['label']} feature coming soon!',
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SettingsScreen(
+                          userId: widget.userId,
+                          userName: widget.userName,
+                          userEmail: widget.userEmail,
                         ),
-                        duration: const Duration(seconds: 1),
                       ),
                     );
                   }

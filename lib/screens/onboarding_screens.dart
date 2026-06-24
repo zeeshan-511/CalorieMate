@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'signup_page.dart'; // Import the signup page
+import 'signup_page.dart';
 
-/// STEP INDICATOR
+
 class StepIndicator extends StatelessWidget {
   final int totalSteps;
   final int currentStep;
@@ -35,7 +35,7 @@ class StepIndicator extends StatelessWidget {
   }
 }
 
-/// ONBOARDING SCREEN
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -110,7 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          /// BACKGROUND IMAGE (TOP 60%)
+
           Positioned(
             top: 0,
             left: 0,
@@ -127,7 +127,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          /// BACK BUTTON
+
           if (_currentStep > 1)
             Positioned(
               top: 50,
@@ -141,7 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-          /// SKIP BUTTON
+
           Positioned(
             top: 50,
             right: 16,
@@ -154,7 +154,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          /// BOTTOM CONTENT
+
           Positioned(
             left: 0,
             right: 0,

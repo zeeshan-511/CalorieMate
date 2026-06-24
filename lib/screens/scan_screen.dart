@@ -44,7 +44,7 @@ class _ScanScreenState extends State<ScanScreen> {
       await _controller.setFocusMode(FocusMode.auto);
       await _controller.setExposureMode(ExposureMode.auto);
     } catch (_) {
-      // Some devices do not support all focus/exposure modes.
+
     }
 
     if (mounted) {
@@ -89,7 +89,7 @@ class _ScanScreenState extends State<ScanScreen> {
     try {
       await _initializeControllerFuture;
 
-      // Keep flash off unless user manually enabled torch.
+
       if (!_flashOn) {
         await _controller.setFlashMode(FlashMode.off);
       }
@@ -99,7 +99,7 @@ class _ScanScreenState extends State<ScanScreen> {
         await _controller.setExposureMode(ExposureMode.auto);
       } catch (_) {}
 
-      // Small delay helps the camera focus before capture.
+
       await Future.delayed(const Duration(milliseconds: 450));
 
       final image = await _controller.takePicture();
@@ -111,7 +111,7 @@ class _ScanScreenState extends State<ScanScreen> {
       final result = await ApiService.scanLabel(File(image.path));
 
       if (!mounted) return;
-      Navigator.pop(context); // close loading dialog
+      Navigator.pop(context);
 
       Navigator.push(
         context,

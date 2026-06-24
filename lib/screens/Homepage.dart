@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/session_service.dart';
 import 'login_page.dart';
 import 'scan_screen.dart';
 import 'family_profile.dart';
-import 'my_preferences.dart' as myprefs; // Import the preferences page
+import 'my_preferences.dart' as myprefs;
 import 'view_preferences.dart';
 import 'view_family_members.dart';
 import 'view_family_preferences.dart';
@@ -12,10 +13,11 @@ import 'family_requests_screen.dart';
 import 'ScanHistory.dart';
 import 'reports_screen.dart';
 import 'health_dashboard_screen.dart';
+import 'Setting.dart';
 
-// ─────────────────────────────────────────────
-//  MODELS
-// ─────────────────────────────────────────────
+
+
+
 class _FeatureCard {
   final IconData icon;
   final String label;
@@ -33,9 +35,9 @@ class _BlogPost {
   const _BlogPost(this.tag, this.title, this.tagColor, this.tagBg, this.icon);
 }
 
-// ─────────────────────────────────────────────
-//  SIDEBAR DRAWER
-// ─────────────────────────────────────────────
+
+
+
 class AppDrawer extends StatelessWidget {
   final String userName;
   final String userEmail;
@@ -53,8 +55,7 @@ class AppDrawer extends StatelessWidget {
   static const Color _teal = Color(0xFF2E8B72);
 
   Future<void> _logout(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await SessionService.clearSession();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -141,7 +142,7 @@ class AppDrawer extends StatelessWidget {
                     ),
                     _divider(),
 
-                    // ✅ Preferences Section FIRST
+
                     _DrawerItem(
                       icon: Icons.tune,
                       label: 'Set your Preferences',
@@ -178,7 +179,7 @@ class AppDrawer extends StatelessWidget {
                       },
                     ),
 
-                    // ✅ Family Section AFTER
+
                     _DrawerItem(
                       icon: Icons.people_outline,
                       label: 'Add Family Member',
@@ -312,6 +313,18 @@ class AppDrawer extends StatelessWidget {
                     _DrawerItem(
                       icon: Icons.settings_outlined,
                       label: 'Settings',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SettingsScreen(
+                              userId: userId,
+                              userName: userName,
+                              userEmail: userEmail,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _divider(),
                   ],
@@ -319,12 +332,10 @@ class AppDrawer extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
-                child: GestureDetector(
+                child: _DrawerItem(
+                  icon: Icons.logout,
+                  label: 'Log Out',
                   onTap: () => _logout(context),
-                  child: const _DrawerItem(
-                    icon: Icons.logout,
-                    label: 'Log Out',
-                  ),
                 ),
               ),
             ],
@@ -376,7 +387,7 @@ class _DrawerItem extends StatelessWidget {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$label feature coming soon!'),
+              content: Text('$label is unavailable right now.'),
               duration: const Duration(seconds: 1),
             ),
           );
@@ -386,9 +397,9 @@ class _DrawerItem extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  NUTRI SCAN APP
-// ─────────────────────────────────────────────
+
+
+
 class NutriScanApp extends StatelessWidget {
   const NutriScanApp({super.key});
 
@@ -408,9 +419,9 @@ class NutriScanApp extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  HOME PAGE
-// ─────────────────────────────────────────────
+
+
+
 class HomePage extends StatefulWidget {
   final Map<String, dynamic>? userData;
   const HomePage({super.key, this.userData});
@@ -630,26 +641,40 @@ class _HomePageState extends State<HomePage>
               ],
             ),
           ),
-          Stack(
-            children: [
-              const Icon(
-                Icons.notifications_none,
-                size: 28,
-                color: Colors.black87,
-              ),
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FamilyRequestsScreen(
+                    userId: userId,
+                    userName: userName,
+                    userEmail: userEmail,
                   ),
                 ),
-              ),
-            ],
+              );
+            },
+            child: Stack(
+              children: [
+                const Icon(
+                  Icons.notifications_none,
+                  size: 28,
+                  color: Colors.black87,
+                ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 12),
           GestureDetector(
@@ -1039,15 +1064,19 @@ class _HomePageState extends State<HomePage>
                     ).then((_) {
                       if (mounted) setState(() => _selectedNav = 0);
                     });
-                  } else if (i != 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${navItems[i]['label']} feature coming soon!',
+                  } else if (i == 4) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SettingsScreen(
+                          userId: userId,
+                          userName: userName,
+                          userEmail: userEmail,
                         ),
-                        duration: const Duration(seconds: 1),
                       ),
-                    );
+                    ).then((_) {
+                      if (mounted) setState(() => _selectedNav = 0);
+                    });
                   }
                 },
                 child: Column(
